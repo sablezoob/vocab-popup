@@ -1,0 +1,75 @@
+# Колода: lesson-02 — слова с занятий, вторая порция
+# формат: слово | перевод | /транскрипция/ | пример EN | пример RU
+#
+# Транскрипция дана в IPA — в карточке она показывается так же, как у остальных
+# колод. Русская запись из конспекта («кьюриэс») даёт лишь приблизительный звук,
+# поэтому в базу она не попадает.
+#
+# Напоминание из конспекта: буквосочетание -th- в healthy, thousand, thoughts
+# читается как глухое /θ/ — язык между зубами, а не «с» и не «ф».
+
+# --- чувства и состояния ---
+curious | любопытный, интересующийся | /ˈkjʊəriəs/ | I am curious about how it works. | Мне любопытно, как это работает.
+anxious | тревожный, беспокойный | /ˈæŋkʃəs/ | She feels anxious before every exam. | Она тревожится перед каждым экзаменом.
+hopeful | надеющийся, полный надежды | /ˈhəʊpfl/ | We are hopeful that the answer comes today. | Мы надеемся, что ответ придёт сегодня.
+grateful | благодарный | /ˈɡreɪtfl/ | I am grateful for your advice. | Я благодарен за твой совет.
+frustrated | разочарованный, раздражённый | /frʌˈstreɪtɪd/ | He was frustrated by the slow answer. | Он был раздражён медленным ответом.
+confident | уверенный | /ˈkɒnfɪdənt/ | She is confident in her decision. | Она уверена в своём решении.
+ashamed | пристыженный, неловко за себя | /əˈʃeɪmd/ | I am ashamed of my mistake. | Мне стыдно за свою ошибку.
+scared | испуганный | /skeəd/ | The child was scared of the dark. | Ребёнок боялся темноты.
+calm | спокойный | /kɑːm/ | Stay calm and wait a minute. | Сохраняй спокойствие и подожди минуту.
+feelings | чувства | /ˈfiːlɪŋz/ | He never talks about his feelings. | Он никогда не говорит о своих чувствах.
+thoughts | мысли | /θɔːts/ | Share your thoughts with me. | Поделись со мной своими мыслями.
+
+# --- технологии и данные ---
+artificial intelligence | искусственный интеллект | /ˌɑːtɪˈfɪʃl ɪnˈtelɪdʒəns/ | Artificial intelligence can respond in seconds. | Искусственный интеллект может ответить за секунды.
+data | данные | /ˈdeɪtə/ | The model learns from data. | Модель учится на данных.
+based on | на основе, основываясь на | /ˈbeɪst ɒn/ | The answer is based on real data. | Ответ основан на реальных данных.
+advanced | продвинутый | /ədˈvɑːnst/ | This is an advanced level. | Это продвинутый уровень.
+recent | недавний | /ˈriːsnt/ | This is a recent example. | Это недавний пример.
+respond | отвечать, реагировать | /rɪˈspɒnd/ | Please respond when you are free. | Ответь, пожалуйста, когда освободишься.
+provide | предоставлять | /prəˈvaɪd/ | They provide free advice. | Они предоставляют бесплатные консультации.
+reflect | размышлять, отражать | /rɪˈflekt/ | I need time to reflect on it. | Мне нужно время, чтобы это обдумать.
+safety | безопасность | /ˈseɪfti/ | Safety comes first. | Безопасность прежде всего.
+
+# --- оценка и сравнение ---
+cheap | дешёвый | /tʃiːp/ | This model is cheap but good. | Эта модель дешёвая, но хорошая.
+expensive | дорогой | /ɪkˈspensɪv/ | A good laptop is expensive. | Хороший ноутбук стоит дорого.
+between | между | /bɪˈtwiːn/ | The difference between them is small. | Разница между ними небольшая.
+most | наибольшее, большинство | /məʊst/ | Most people agree with this. | Большинство людей с этим согласны.
+even | даже | /ˈiːvn/ | Even a cheap phone can do this. | Даже дешёвый телефон может это сделать.
+agree | соглашаться | /əˈɡriː/ | I agree with your thoughts. | Я согласен с твоими мыслями.
+advice | совет | /ədˈvaɪs/ | Thank you for the advice. | Спасибо за совет.
+definitely | определённо, точно | /ˈdefɪnətli/ | I will definitely join you. | Я точно к вам присоединюсь.
+in fact | на самом деле, фактически | /ɪn ˈfækt/ | In fact, it is much cheaper. | На самом деле это гораздо дешевле.
+
+# --- работа, деньги, быт ---
+queue | очередь | /kjuː/ | We waited in a long queue. | Мы стояли в длинной очереди.
+high expectation | высокие ожидания | /haɪ ˌekspekˈteɪʃn/ | He has a high expectation of the salary. | У него высокие ожидания по зарплате.
+salary | зарплата | /ˈsæləri/ | The salary is about two thousand. | Зарплата около двух тысяч.
+thousand | тысяча | /ˈθaʊznd/ | It costs a thousand dollars. | Это стоит тысячу долларов.
+move | двигаться, переезжать; переезд | /muːv/ | They move to another city in May. | В мае они переезжают в другой город.
+wait | ждать | /weɪt/ | Wait for me after the lesson. | Подожди меня после урока.
+after | после | /ˈɑːftə/ | Let's talk after the meeting. | Давай поговорим после встречи.
+every time | каждый раз | /ˈevri taɪm/ | Every time I try, it works. | Каждый раз, когда я пробую, получается.
+was surprised | был удивлён | /wɒz səˈpraɪzd/ | I was surprised by the news. | Я был удивлён новостью.
+
+# --- договориться о встрече ---
+tips | маленькие советы; чаевые | /tɪps/ | He gave me a few useful tips. | Он дал мне несколько полезных советов.
+catch up | пересечься, пообщаться | /ˌkætʃ ˈʌp/ | Let's catch up after work. | Давай пересечёмся после работы.
+join | присоединиться | /dʒɔɪn/ | Join us at the table. | Присоединяйся к нам за столом.
+at my place | у меня дома, у меня | /ət maɪ ˈpleɪs/ | We can meet at my place. | Мы можем встретиться у меня.
+out of town | за городом, вне города | /ˌaʊt əv ˈtaʊn/ | I am out of town this week. | На этой неделе я за городом.
+i will | я буду (будущее время; кратко I'll) | /aɪ wɪl/ | I will call you tomorrow. | Я позвоню тебе завтра.
+would | бы (кратко I'd) | /wʊd/ | I would join you if I had time. | Я бы к вам присоединился, будь у меня время.
+
+# --- природа и живое ---
+creature | существо | /ˈkriːtʃə/ | The ocean is full of strange creatures. | Океан полон странных существ.
+species | вид (биологический) | /ˈspiːʃiːz/ | This species lives only here. | Этот вид живёт только здесь.
+endangered | находящийся под угрозой исчезновения | /ɪnˈdeɪndʒəd/ | The whale is an endangered animal. | Кит — животное под угрозой исчезновения.
+injured | раненый | /ˈɪndʒəd/ | They found an injured bird. | Они нашли раненую птицу.
+hunting | охота | /ˈhʌntɪŋ/ | Hunting is banned in this area. | Охота в этом районе запрещена.
+fins | плавники | /fɪnz/ | Sharks are killed for their fins. | Акул убивают ради плавников.
+healthy | здоровый | /ˈhelθi/ | A healthy diet is important. | Здоровое питание важно.
+mindless | бездумный | /ˈmaɪndləs/ | Mindless hunting harms the whole species. | Бездумная охота вредит всему виду.
+misunderstanding | недопонимание | /ˌmɪsʌndəˈstændɪŋ/ | It was just a misunderstanding. | Это было просто недопонимание.

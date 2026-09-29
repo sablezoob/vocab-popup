@@ -78,3 +78,29 @@ def test_quiz_needs_enough_words(fresh_db):
     fresh_db.add_word("two", translation="два", ipa="/t/")
     row = fresh_db.conn().execute("SELECT * FROM words WHERE word='one'").fetchone()
     assert quiz.translation_options(row) == []
+
+
+def test_every_seed_line_is_usable():
+    """Колоды лежат текстом, и опечатка в разделителе молча теряет слово:
+    загрузчик просто пропускает строку, а в базе её потом не хватишься."""
+    import io
+    import os
+    import seed
+
+    for filename, (tags, _level, _ow) in seed.DECKS.items():
+        path = os.path.join(seed.SEEDS, filename)
+        assert os.path.exists(path), f"колода {filename} указана, но файла нет"
+        seen = set()
+        with io.open(path, encoding="utf-8") as f:
+            for num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                where = f"{filename}:{num}"
+                parsed = parse_line(line)
+                assert parsed, f"{where}: строка не разобралась"
+                assert parsed["translation"], f"{where}: нет перевода"
+                low = parsed["word"].lower()
+                assert low not in seen, f"{where}: слово {low} уже есть в колоде"
+                seen.add(low)
+        assert seen, f"колода {filename} пустая"
