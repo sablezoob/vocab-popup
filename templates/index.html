@@ -299,6 +299,22 @@ autumn | осень"></textarea>
 
   <!-- ============ НАСТРОЙКИ ============ -->
   <section class="tab" id="tab-set">
+    <h2>Резервные копии</h2>
+    <div id="backupbox"></div>
+    <div class="row" style="margin-top:12px">
+      <div style="flex:0"><button class="act" onclick="makeBackup()">Сделать копию сейчас</button></div>
+      <div><label>Сколько копий хранить</label>
+        <input id="s_bkeep" type="number" min="1" max="60"></div>
+      <div><label>Копии по расписанию</label><select id="s_benabled">
+        <option value="1">раз в сутки</option><option value="0">выключены</option>
+      </select></div>
+    </div>
+    <div class="hint">Копия снимается встроенным механизмом SQLite, а не копированием
+      файла: свежие записи лежат в журнале <code>vocab.db-wal</code>, и простая копия
+      <code>vocab.db</code> их теряет. Восстановление — остановить сервис, положить файл
+      копии вместо <code>data/vocab.db</code>, удалить <code>vocab.db-wal</code>
+      и <code>vocab.db-shm</code>, запустить снова.</div>
+
     <div class="row">
       <div><label>Интервал показа, мин</label><input id="s_interval" type="number" min="1" max="240"></div>
       <div><label>Время жизни карточки, сек</label><input id="s_life" type="number" min="4" max="120"></div>
@@ -404,7 +420,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   $("#tab-" + b.dataset.t).classList.add("on");
   if (b.dataset.t === "stat") loadStats();
   if (b.dataset.t === "words") loadWords();
-  if (b.dataset.t === "set") loadSet();
+  if (b.dataset.t === "set") { loadSet(); loadBackup(); }
 });
 
 const STATUS_RU = {new:"новое", learning:"в работе", learned:"выучено", suspended:"отложено"};
@@ -774,6 +790,38 @@ async function doImport(){
   if (r.created || r.updated) $("#itext").value = "";
 }
 
+async function loadBackup(){
+  const b = await (await fetch("/api/backup")).json();
+  const mb = n => (n/1024/1024).toFixed(2) + " МБ";
+  $("#s_bkeep").value = b.keep;
+  $("#s_benabled").value = b.enabled ? "1" : "0";
+  $("#backupbox").innerHTML = b.count
+    ? `<div class="card"><div class="n ${b.enabled ? "ok" : "warn"}">${b.last_at}</div>
+         <div class="l">последняя копия · ${mb(b.last_size)} · всего ${b.count}</div></div>
+       <div class="hint" style="margin-top:10px">Папка: <code>${esc(b.dir)}</code></div>
+       <div class="tablewrap" style="margin-top:10px"><table><thead><tr>
+         <th>Файл</th><th>Размер</th><th>Когда</th></tr></thead><tbody>
+         ${b.items.map(x => `<tr><td class="w">${esc(x.name)}</td>
+            <td>${mb(x.size)}</td><td class="hint">${esc(x.at)}</td></tr>`).join("")}
+       </tbody></table></div>`
+    : `<div class="card"><div class="n bad">нет копий</div>
+         <div class="l">весь прогресс существует в одном экземпляре</div></div>`;
+}
+
+async function makeBackup(){
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = "Делаю копию…";
+  try {
+    const r = await (await fetch("/api/backup", {method:"POST"})).json();
+    alert(r.ok ? `Копия готова: ${r.name}
+слов ${r.info.words}, показов ${r.info.events}`
+               : `Не получилось: ${r.error || r.info}`);
+  } finally {
+    btn.disabled = false; btn.textContent = "Сделать копию сейчас";
+    loadBackup();
+  }
+}
+
 async function loadSet(){
   const s = await (await fetch("/api/settings")).json();
   $("#s_interval").value = s.interval_min; $("#s_life").value = s.popup_seconds;
@@ -831,6 +879,7 @@ async function saveSet(){
     margin_px:$("#s_margin").value, focus_tag:$("#s_focus").value,
     card_scale:$("#s_scale").value,
     tts_enabled:$("#s_tts").value, tts_voice:$("#s_voice").value,
+    backup_enabled:$("#s_benabled").value, backup_keep:$("#s_bkeep").value,
     know_to_learn:$("#s_know").value, review_learned:$("#s_review").value,
     daily_goal:$("#s_goal").value, review_threshold:$("#s_rev").value,
     quiet_from:$("#s_qfrom").value, quiet_to:$("#s_qto").value,

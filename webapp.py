@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Локальный дашборд на 127.0.0.1:8777 — импорт слов, редактирование, статистика."""
 import logging
+import os
 import re
 import sqlite3
 from datetime import datetime, timedelta
@@ -9,6 +10,7 @@ from flask import Flask, jsonify, render_template, request
 
 import ai
 import aiworker
+import backup
 import db
 import quiz
 import ruread
@@ -421,6 +423,23 @@ def _period_totals(c, span):
         "active_days": one(f"SELECT COUNT(DISTINCT {day}) FROM events WHERE {day} >= ?", (since,)),
         "minutes": round(one(f"SELECT SUM(ms_visible) FROM events WHERE {day} >= ?", (since,)) / 60000.0, 1),
     }
+
+
+@app.get("/api/backup")
+def api_backup_status():
+    return jsonify(backup.status())
+
+
+@app.post("/api/backup")
+def api_backup_make():
+    """Копия по кнопке из дашборда. Сразу же проверяется: копия, которую
+    никто не открывал, — обещание, а не страховка."""
+    path = backup.make()
+    if not path:
+        return jsonify({"ok": False, "error": "не удалось записать копию"}), 500
+    ok, info = backup.verify(path)
+    return jsonify({"ok": ok, "name": os.path.basename(path),
+                    "info": info if ok else str(info), **backup.status()})
 
 
 @app.get("/api/learned")

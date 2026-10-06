@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 import ai
 import aiworker
+import backup
 import db
 import hotkeys
 import srs
@@ -174,6 +175,7 @@ class App:
         self._skip_reason = None
         self._interval_min = 3
         self._due_at = 0.0
+        self._backup_check_at = 0.0
         self._review_offered_on = None      # дата последнего предложения разобрать
 
         self.tray = QSystemTrayIcon(make_icon("A"))
@@ -308,6 +310,12 @@ class App:
         a_dash = QAction("Дашборд и слова…", m)
         a_dash.triggered.connect(lambda: webbrowser.open(DASHBOARD_URL))
         m.addAction(a_dash)
+
+        st = backup.status()
+        a_backup = QAction("Резервная копия сейчас", m)
+        a_backup.setToolTip("Копий: %d, последняя %s" % (st["count"], st["last_at"] or "не делалась"))
+        a_backup.triggered.connect(self.backup_now)
+        m.addAction(a_backup)
 
         if self.hk_labels:
             info = QAction("Клавиши: Ctrl+Alt+1 знаю · 2 ещё раз · 3 пропустить", m)
@@ -469,6 +477,7 @@ class App:
         self.update_icon()
 
     def on_timer(self):
+        self.maybe_backup()
         want = max(1, db.get_int("interval_min", 3))
         if want != self._interval_min:
             # интервал изменили из дашборда — пересчитываем срок показа
@@ -480,6 +489,46 @@ class App:
             self._due_at = time.monotonic() + want * 60
             self.show_next()
             self.maybe_offer_review()
+
+    BACKUP_CHECK_S = 3600       # чаще проверять незачем: копия раз в сутки
+
+    def maybe_backup(self):
+        """Резервная копия по расписанию.
+
+        Делается молча и в рабочем потоке: снимок базы размером в пару
+        мегабайт занимает доли секунды, отдельный поток тут только добавил бы
+        гонку за соединением к базе.
+        """
+        now = time.monotonic()
+        if now < self._backup_check_at:
+            return
+        self._backup_check_at = now + self.BACKUP_CHECK_S
+        try:
+            path = backup.tick()
+            if path:
+                log.info("Резервная копия готова: %s", os.path.basename(path))
+        except Exception:
+            log.exception("Резервная копия не удалась")
+
+    def backup_now(self):
+        """Копия по кнопке. Результат показываем всплывающим сообщением:
+        молчаливая кнопка «сделал или нет?» хуже, чем её отсутствие."""
+        try:
+            path = backup.make()
+        except Exception:
+            log.exception("Резервная копия по кнопке не удалась")
+            path = None
+        if not path:
+            self.tray.showMessage("Vocab Popup",
+                                  "Не удалось сделать копию — смотрите data/app.log",
+                                  QSystemTrayIcon.Warning, 6000)
+            return
+        ok, info = backup.verify(path)
+        text = (f"Копия готова: {os.path.basename(path)} — "
+                f"слов {info['words']}, показов {info['events']}" if ok
+                else f"Копия записана, но проверка не прошла: {info}")
+        self.tray.showMessage("Vocab Popup", text, QSystemTrayIcon.Information, 6000)
+        self.refresh_menu()
 
     def note_skip(self, reason):
         """Пишет в лог смену причины молчания — иначе непонятно, почему нет карточек."""
