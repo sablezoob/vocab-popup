@@ -310,22 +310,33 @@ def api_decks():
     return jsonify(sorted(tags.items(), key=lambda x: -x[1]))
 
 
+# Сколько дней показывать в отчёте. Год целиком столбиками не читается,
+# поэтому длинные периоды сворачиваются в недели и месяцы.
+PERIODS = {7: "day", 30: "day", 90: "week", 365: "month"}
+
+
 @app.get("/api/stats")
 def api_stats():
     s = srs.stats()
     c = db.conn()
+    try:
+        span = int(request.args.get("days") or 30)
+    except ValueError:
+        span = 30
+    span = span if span in PERIODS else 30
 
-    # Один запрос с группировкой по локальному дню вместо 30 отдельных.
+    # Один запрос с группировкой по локальному дню вместо N отдельных.
     agg = {r["d"]: r for r in c.execute(
         f"""SELECT {srs.LOCAL_DAY} d, COUNT(*) a, SUM(action='know') k
             FROM events GROUP BY d""")}
     days = []
-    for i in range(29, -1, -1):
+    for i in range(span - 1, -1, -1):
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         r = agg.get(d)
         days.append({"date": d,
                      "shown": (r["a"] if r else 0) or 0,
                      "know": (r["k"] if r else 0) or 0})
+    days = _bucket(days, PERIODS[span])
 
     hard = [dict(r) for r in c.execute("""
         SELECT w.id, w.word, w.translation,
@@ -345,9 +356,96 @@ def api_stats():
             if t:
                 tags[t] = tags.get(t, 0) + 1
 
-    return jsonify({"stats": s, "days": days, "hard": hard,
+    # «Почему одни и те же слова?» — вопрос решается не ощущением, а списком:
+    # вот слова, которые мелькают чаще всех, и вот сколько раз вы на них
+    # ответили. Пустой столбец ответов и есть причина, по которой они не уходят.
+    spinning = [dict(r) for r in c.execute("""
+        SELECT w.id, w.word, w.translation, w.tags,
+               COUNT(e.id) shown_cnt,
+               SUM(e.action='know')  know_cnt,
+               SUM(e.action='again') again_cnt,
+               COALESCE(sr.status,'new') status
+        FROM events e JOIN words w ON w.id = e.word_id
+        LEFT JOIN srs sr ON sr.word_id = w.id
+        GROUP BY w.id ORDER BY shown_cnt DESC LIMIT 15""")]
+
+    return jsonify({"stats": s, "days": days, "hard": hard, "spinning": spinning,
+                    "focus_tag": (db.get("focus_tag") or "").strip(),
+                    "span": span, "bucket": PERIODS[span],
+                    "period": _period_totals(c, span),
                     "tags": sorted(tags.items(), key=lambda x: -x[1]),
                     **extended_stats(c)})
+
+
+def _bucket(days, size):
+    """Сворачивает дни в недели или месяцы.
+
+    365 столбиков в полосе шириной с экран — это полоса шума: разницу между
+    соседними днями всё равно не видно, а сезон виден только крупным шагом.
+    """
+    if size == "day":
+        return days
+    out, cur = [], {}
+    for d in days:
+        key = d["date"][:7] if size == "month" else _week_start(d["date"])
+        if cur.get("date") != key:
+            cur = {"date": key, "shown": 0, "know": 0}
+            out.append(cur)
+        cur["shown"] += d["shown"]
+        cur["know"] += d["know"]
+    return out
+
+
+def _week_start(date_str):
+    d = datetime.strptime(date_str, "%Y-%m-%d")
+    return (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")
+
+
+def _period_totals(c, span):
+    """Итоги ровно за выбранный период, а не за всё время."""
+    since = (datetime.now() - timedelta(days=span - 1)).strftime("%Y-%m-%d")
+    day = srs.LOCAL_DAY
+    one = lambda sql, p=(): c.execute(sql, p).fetchone()[0] or 0
+    return {
+        "days": span,
+        "since": since,
+        "shown": one(f"SELECT COUNT(*) FROM events WHERE {day} >= ?", (since,)),
+        "answered": one(f"SELECT COUNT(*) FROM events WHERE action IN ('know','again') AND {day} >= ?", (since,)),
+        "know": one(f"SELECT COUNT(*) FROM events WHERE action='know' AND {day} >= ?", (since,)),
+        "again": one(f"SELECT COUNT(*) FROM events WHERE action='again' AND {day} >= ?", (since,)),
+        "words_touched": one(f"SELECT COUNT(DISTINCT word_id) FROM events WHERE {day} >= ?", (since,)),
+        "learned": one("""SELECT COUNT(*) FROM srs WHERE status='learned'
+                          AND substr(datetime(learned_at,'localtime'),1,10) >= ?""", (since,)),
+        "added": one("""SELECT COUNT(*) FROM words
+                        WHERE substr(datetime(created_at,'localtime'),1,10) >= ?""", (since,)),
+        "active_days": one(f"SELECT COUNT(DISTINCT {day}) FROM events WHERE {day} >= ?", (since,)),
+        "minutes": round(one(f"SELECT SUM(ms_visible) FROM events WHERE {day} >= ?", (since,)) / 60000.0, 1),
+    }
+
+
+@app.get("/api/learned")
+def api_learned():
+    """Все выученные слова — целиком, а не последние несколько."""
+    return jsonify({"items": srs.learned_words(
+        order=request.args.get("order") or "learned_at")})
+
+
+@app.post("/api/word/<int:wid>/relearn")
+def api_relearn(wid):
+    """Вернуть слово в изучение: забылось — пусть показывается снова."""
+    if not db.conn().execute("SELECT 1 FROM words WHERE id=?", (wid,)).fetchone():
+        return jsonify({"ok": False, "error": "слово не найдено"}), 404
+    row = srs.relearn(wid)
+    return jsonify({"ok": True, "status": row["status"], "reps": row["reps"]})
+
+
+@app.get("/api/word/<int:wid>/history")
+def api_word_history(wid):
+    h = srs.word_history(wid)
+    if h is None:
+        return jsonify({"error": "слово не найдено"}), 404
+    h["ru_read"] = ruread.show(h)
+    return jsonify(h)
 
 
 def extended_stats(c):
@@ -440,8 +538,18 @@ def api_words():
     sql = """SELECT w.*, COALESCE(s.status,'new') status,
                     COALESCE(s.reps,0) reps, COALESCE(s.lapses,0) lapses,
                     s.due_at, COALESCE(s.interval_min,0) interval_min,
+                    datetime(w.created_at,'localtime')     added_at,
+                    datetime(s.first_shown_at,'localtime') first_shown_at,
+                    datetime(s.learned_at,'localtime')     learned_at,
                     (SELECT COUNT(*) FROM events e WHERE e.word_id=w.id) shown_cnt,
-                    (SELECT COUNT(*) FROM events e WHERE e.word_id=w.id AND e.action='know') know_cnt
+                    (SELECT COUNT(*) FROM events e WHERE e.word_id=w.id AND e.action='know') know_cnt,
+                    (SELECT COUNT(*) FROM events e WHERE e.word_id=w.id AND e.action='again') again_cnt,
+                    datetime((SELECT MAX(e.shown_at) FROM events e WHERE e.word_id=w.id),
+                             'localtime') last_shown_at,
+                    -- сколько суток слово в работе: от первой встречи до
+                    -- «выучено», а пока не выучено — до сегодня
+                    CAST(julianday(COALESCE(NULLIF(s.learned_at,''), 'now')) -
+                         julianday(NULLIF(s.first_shown_at,'')) AS INTEGER) days_learning
              FROM words w LEFT JOIN srs s ON s.word_id=w.id WHERE 1=1"""
     params = []
     if q:
@@ -453,7 +561,13 @@ def api_words():
     if tag:
         sql += " AND w.tags LIKE ?"
         params.append(f"%{tag}%")
-    sql += " ORDER BY w.created_at DESC, w.id DESC LIMIT 800"
+    order = {"new": "w.created_at DESC, w.id DESC",
+             "shown": "shown_cnt DESC",
+             "rare": "shown_cnt ASC",
+             "word": "w.word COLLATE NOCASE ASC",
+             "know": "know_cnt DESC",
+             "days": "days_learning DESC"}.get(request.args.get("sort") or "new")
+    sql += f" ORDER BY {order or 'w.created_at DESC, w.id DESC'} LIMIT 800"
     return jsonify([_with_reading(r) for r in db.conn().execute(sql, params)])
 
 

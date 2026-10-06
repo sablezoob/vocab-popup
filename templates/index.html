@@ -62,6 +62,22 @@
   .hint{color:var(--muted);font-size:12px;margin-top:6px}
   .ok{color:var(--ok)} .bad{color:var(--bad)}
   .empty{color:var(--muted);padding:32px;text-align:center}
+  .seg{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:var(--panel);border:none;color:var(--dim);padding:8px 16px;
+              font-size:13px;cursor:pointer;border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:none}
+  .seg button.on{background:var(--accentFill);color:#fff}
+  .seg button:hover:not(.on){color:var(--text)}
+  .periodbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .wordinfo{background:var(--panel);border:1px solid var(--accent);border-radius:12px;
+            padding:16px 18px;margin-bottom:14px}
+  .wordinfo h3{margin:0 0 4px 0;font-size:21px}
+  .wordinfo .close{float:right}
+  .facts{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+         margin:14px 0}
+  .facts div b{display:block;font-size:19px;font-weight:600}
+  .facts div s{display:block;color:var(--dim);font-size:11px;text-decoration:none;
+               text-transform:uppercase;letter-spacing:.4px}
   code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px;color:#9ecbff}
 
   /* цель дня */
@@ -133,12 +149,30 @@
 </header>
 
 <main>
+  <!-- История одного слова. Живёт вне вкладок: её открывают и из статистики,
+       и из списка слов, и перепрыгивать между вкладками ради неё не нужно. -->
+  <div class="wordinfo" id="wordinfo" style="display:none"></div>
   <!-- ============ СТАТИСТИКА ============ -->
   <section class="tab on" id="tab-stat">
     <div id="goalbox"></div>
+    <div class="periodbar">
+      <span class="hint">Период отчёта:</span>
+      <div class="seg" id="period">
+        <button data-d="7">неделя</button>
+        <button data-d="30" class="on">30 дней</button>
+        <button data-d="90">3 месяца</button>
+        <button data-d="365">год</button>
+      </div>
+      <span class="hint" id="periodnote"></span>
+    </div>
+
+    <h2 id="periodtitle">Итоги за 30 дней</h2>
+    <div class="grid" id="periodtiles"></div>
+
+    <h2>Сейчас в словаре</h2>
     <div class="grid" id="tiles"></div>
 
-    <h2>Активность за 30 дней</h2>
+    <h2 id="heattitle">Активность за 30 дней</h2>
     <div class="heat" id="heat"></div>
     <div class="hint">Насыщенность — сколько показов было в этот день.</div>
 
@@ -173,15 +207,34 @@
     <h2>Тренировки</h2>
     <div id="trainstat"></div>
 
+    <h2>Крутятся чаще всего</h2>
+    <div class="hint" id="spinhint"></div>
+    <div class="tablewrap"><table id="spinning"><thead><tr>
+      <th>Слово</th><th>Перевод</th><th>Колода</th><th>Показов</th>
+      <th>Знаю</th><th>Ещё раз</th><th>Статус</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+
     <h2>Тяжёлые слова — чаще всего жмёшь «Ещё раз»</h2>
     <div class="tablewrap"><table id="hard"><thead><tr>
       <th>Слово</th><th>Перевод</th><th>Показов</th><th>Знаю</th><th>Ещё раз</th>
     </tr></thead><tbody></tbody></table></div>
 
-    <h2>Выучено — больше не показываются</h2>
+    <h2>Выучено — больше не показываются <span class="hint" id="learnedcount"></span></h2>
+    <div class="periodbar">
+      <span class="hint">Сортировать:</span>
+      <div class="seg" id="learnedsort">
+        <button data-o="learned_at" class="on">по дате</button>
+        <button data-o="word">по алфавиту</button>
+        <button data-o="shown">по числу показов</button>
+        <button data-o="days">по сроку изучения</button>
+      </div>
+    </div>
     <div class="tablewrap"><table id="learned"><thead><tr>
-      <th>Слово</th><th>Перевод</th><th>Колода</th><th>Верных ответов</th><th>Контроль</th>
+      <th>Слово</th><th>Перевод</th><th>Выучено</th><th>Показов</th>
+      <th>Знаю / Ещё раз</th><th>Учил дней</th><th>Контроль</th><th></th>
     </tr></thead><tbody></tbody></table></div>
+    <div class="hint">Кнопка «Вернуть» снова ставит слово в показ: счётчик верных
+      ответов обнуляется, и его опять надо подтвердить дважды.</div>
   </section>
 
   <!-- ============ СЛОВА ============ -->
@@ -194,11 +247,21 @@
         <option value="suspended">отложенные</option>
       </select></div>
       <div><label>Колода (тег)</label><input id="ftag" placeholder="tense:present-perfect"></div>
+      <div><label>Сортировка</label><select id="fsort">
+        <option value="new">сначала новые в словаре</option>
+        <option value="shown">чаще всего показывались</option>
+        <option value="rare">реже всего показывались</option>
+        <option value="know">больше всего ответов «Знаю»</option>
+        <option value="days">дольше всего в изучении</option>
+        <option value="word">по алфавиту</option>
+      </select></div>
       <div style="flex:0"><button class="act" onclick="loadWords()">Показать</button></div>
     </div>
+    <div class="hint" id="wordsnote"></div>
     <div class="tablewrap"><table id="words"><thead><tr>
-      <th style="width:24%">Слово</th><th style="width:26%">Перевод</th>
-      <th style="width:30%">Пример</th><th>Статус</th><th>Показов</th><th></th>
+      <th style="width:20%">Слово</th><th style="width:20%">Перевод</th>
+      <th style="width:24%">Пример</th><th>Статус</th>
+      <th>Показов</th><th>Знаю / Ещё раз</th><th>Добавлено</th><th>Дней</th><th></th>
     </tr></thead><tbody></tbody></table></div>
   </section>
 
@@ -346,8 +409,29 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
 
 const STATUS_RU = {new:"новое", learning:"в работе", learned:"выучено", suspended:"отложено"};
 
+let STAT_DAYS = 30;
+const PERIOD_RU = {7:"неделю", 30:"30 дней", 90:"3 месяца", 365:"год"};
+
 async function loadStats(){
-  const d = await (await fetch("/api/stats")).json(), s = d.stats;
+  const d = await (await fetch("/api/stats?days=" + STAT_DAYS)).json(), s = d.stats;
+  const per = d.period || {};
+  $("#periodtitle").textContent = "Итоги за " + (PERIOD_RU[STAT_DAYS] || STAT_DAYS + " дней");
+  $("#heattitle").textContent = "Активность за " + (PERIOD_RU[STAT_DAYS] || STAT_DAYS + " дней");
+  $("#periodnote").textContent = per.since
+    ? `с ${per.since} · шаг: ${({day:"день", week:"неделя", month:"месяц"})[d.bucket]}` : "";
+  const share = per.shown ? Math.round(per.answered / per.shown * 100) : 0;
+  $("#periodtiles").innerHTML = [
+    ["Выучено за период", per.learned, "ok"],
+    ["Ответов «Знаю»", per.know, "ok"],
+    ["Ответов «Ещё раз»", per.again, per.again ? "warn" : ""],
+    ["Показов", per.shown, ""],
+    ["Отвечено из показов", share + "%", share < 20 ? "bad" : ""],
+    ["Разных слов", per.words_touched, ""],
+    ["Слов добавлено", per.added, ""],
+    ["Дней с занятиями", per.active_days + " из " + per.days, ""],
+    ["Карточки на экране", per.minutes + " мин", ""],
+  ].map(([l, n, c]) =>
+    `<div class="card"><div class="n ${c||""}">${n ?? 0}</div><div class="l">${l}</div></div>`).join("");
   const e = d.extra, g = e.goal || {goal:0, done:0, streak:0};
   const pct = g.goal ? Math.min(100, g.done / g.goal * 100) : 0;
   $("#goalbox").innerHTML = `<div class="goal">
@@ -432,14 +516,29 @@ async function loadStats(){
     ? `в ближайшую неделю созреет повторов: ${soon}`
     : "повторов пока не запланировано";
 
-  $("#learned tbody").innerHTML = d.recent_learned.length
-    ? d.recent_learned.map(r => `<tr>
+  const spin = d.spinning || [];
+  const mute = spin.filter(r => !r.know_cnt).length;
+  $("#spinhint").innerHTML = spin.length
+    ? `Слово уходит из показа только после двух ответов «Знаю». `
+      + (mute ? `<span class="warn">Из 15 самых частых ${mute} не получили ни одного ответа —
+                 поэтому и возвращаются.</span> ` : "")
+      + (d.focus_tag ? `Кроме того, 80% показов идёт из фокус-колоды
+          <b>${esc(d.focus_tag)}</b> — остальные колоды делят оставшиеся 20%.
+          Поле «Фокус-колода» в настройках.` : "")
+    : "";
+  $("#spinning tbody").innerHTML = spin.length
+    ? spin.map(r => `<tr>
         <td class="w">${esc(r.word)}</td><td class="tr">${esc(r.translation)}</td>
-        <td class="hint">${esc(r.tags||"")}</td><td class="ok">${r.reps}</td>
-        <td class="hint">${esc((r.next_at||"").slice(0,10))}</td></tr>`).join("")
-    : `<tr><td colspan="5" class="empty">Пока ничего не выучено.
-         Слово становится выученным после двух ответов «Знаю».</td></tr>`;
+        <td class="hint">${esc(r.tags||"")}</td>
+        <td class="${!r.know_cnt && r.shown_cnt > 20 ? "warn" : ""}">${r.shown_cnt}</td>
+        <td class="${r.know_cnt ? "ok" : "bad"}">${r.know_cnt}</td>
+        <td class="hint">${r.again_cnt}</td>
+        <td><span class="pill ${r.status}">${STATUS_RU[r.status]||r.status}</span></td>
+        <td><button class="ghost" onclick="showWord(${r.id})" title="История слова">i</button></td>
+      </tr>`).join("")
+    : `<tr><td colspan="8" class="empty">Показов ещё не было.</td></tr>`;
 
+  loadLearned();
   loadTrainStats();
   loadQueue();
   $("#live").textContent = `готово к показу: ${s.due_now}`;
@@ -562,8 +661,13 @@ async function loadTrainStats(){
 }
 
 async function loadWords(){
-  const p = new URLSearchParams({q:$("#q").value, status:$("#fstatus").value, tag:$("#ftag").value});
+  const p = new URLSearchParams({q:$("#q").value, status:$("#fstatus").value,
+                                 tag:$("#ftag").value, sort:$("#fsort").value});
   const rows = await (await fetch("/api/words?"+p)).json();
+  const mute = rows.filter(r => r.shown_cnt > 20 && r.know_cnt === 0).length;
+  $("#wordsnote").textContent = rows.length
+    ? `показано ${rows.length} слов` + (mute ? `; из них ${mute} показывались больше 20 раз и ни разу не получили ответа` : "")
+    : "";
   $("#words tbody").innerHTML = rows.length ? rows.map(r => `
     <tr data-id="${r.id}">
       <td><div class="w">${esc(r.word)}</div><div class="ipa">${esc(r.ipa)}</div>
@@ -572,14 +676,83 @@ async function loadWords(){
       <td class="tr">${esc(r.translation) || '<span class="bad">— нет перевода —</span>'}</td>
       <td><div class="ex">${esc(r.example_en)}</div><div class="hint">${esc(r.example_ru)}</div></td>
       <td><span class="pill ${r.status}">${STATUS_RU[r.status]||r.status}</span></td>
-      <td>${r.shown_cnt} <span class="ok">/${r.know_cnt}</span></td>
+      <td class="${r.shown_cnt > 20 && !r.know_cnt ? "warn" : ""}">${r.shown_cnt}</td>
+      <td><span class="ok">${r.know_cnt}</span> / <span class="${r.again_cnt?"warn":"hint"}">${r.again_cnt}</span></td>
+      <td class="hint">${esc((r.added_at||"").slice(0,10))}</td>
+      <td class="hint">${r.days_learning == null ? "—" : r.days_learning}</td>
       <td style="white-space:nowrap">
+        <button class="ghost" onclick="showWord(${r.id})" title="История слова">i</button>
         <button class="ghost" onclick="setStatus(${r.id},'learned')" title="Больше не спрашивать часто">✓</button>
         <button class="ghost" onclick="setStatus(${r.id},'new')" title="Учить заново">↻</button>
         <button class="ghost" onclick="delWord(${r.id})" title="Удалить">✕</button>
       </td>
     </tr>`).join("")
-    : `<tr><td colspan="6" class="empty">Ничего не найдено. Загляните во вкладку «Добавить».</td></tr>`;
+    : `<tr><td colspan="9" class="empty">Ничего не найдено. Загляните во вкладку «Добавить».</td></tr>`;
+}
+
+let LEARNED_ORDER = "learned_at";
+
+async function loadLearned(){
+  const d = await (await fetch("/api/learned?order=" + LEARNED_ORDER)).json();
+  const rows = d.items || [];
+  $("#learnedcount").textContent = rows.length ? `— всего ${rows.length}` : "";
+  $("#learned tbody").innerHTML = rows.length
+    ? rows.map(r => `<tr>
+        <td><div class="w">${esc(r.word)}</div>
+            ${r.ru_read ? `<div class="ruread">${esc(r.ru_read)}</div>` : ""}
+            ${r.tags ? `<div class="hint">${esc(r.tags)}</div>` : ""}</td>
+        <td class="tr">${esc(r.translation)}</td>
+        <td class="hint">${esc((r.learned_at||"").slice(0,16))}</td>
+        <td>${r.shown_cnt}</td>
+        <td><span class="ok">${r.know_cnt}</span> / <span class="${r.again_cnt?"warn":"hint"}">${r.again_cnt}</span></td>
+        <td class="hint">${r.days_to_learn == null ? "—" : r.days_to_learn}</td>
+        <td class="hint">${esc((r.due_at||"").slice(0,10))}</td>
+        <td style="white-space:nowrap">
+          <button class="ghost" onclick="showWord(${r.id})" title="История слова">i</button>
+          <button class="ghost" onclick="relearn(${r.id})" title="Вернуть в изучение">↻ Вернуть</button>
+        </td></tr>`).join("")
+    : `<tr><td colspan="8" class="empty">Пока ничего не выучено.
+         Слово становится выученным после двух ответов «Знаю».</td></tr>`;
+}
+
+async function relearn(id){
+  await fetch(`/api/word/${id}/relearn`, {method:"POST"});
+  loadLearned();
+  loadStats();
+}
+
+async function showWord(id){
+  const h = await (await fetch(`/api/word/${id}/history`)).json();
+  const box = $("#wordinfo");
+  const d = x => x ? esc(String(x).slice(0, 16)) : "—";
+  const answered = h.know_cnt + h.again_cnt;
+  const days = (h.by_day || []).slice(0, 14).reverse();
+  const top = Math.max(1, ...days.map(x => x.shown));
+  box.style.display = "block";
+  box.innerHTML = `
+    <button class="ghost close" onclick="$('#wordinfo').style.display='none'">✕</button>
+    <h3>${esc(h.word)} <span class="pill ${h.status}">${STATUS_RU[h.status]||h.status}</span></h3>
+    <div class="hint">${esc(h.translation)} ${h.ipa ? "· " + esc(h.ipa) : ""}
+         ${h.ru_read ? "· " + esc(h.ru_read) : ""}</div>
+    <div class="facts">
+      <div><b>${h.shown_cnt}</b><s>показов всего</s></div>
+      <div><b class="${answered ? "ok" : "bad"}">${answered}</b><s>из них с ответом</s></div>
+      <div><b class="ok">${h.know_cnt}</b><s>знаю</s></div>
+      <div><b class="${h.again_cnt ? "warn" : ""}">${h.again_cnt}</b><s>ещё раз</s></div>
+      <div><b>${h.skip_cnt}</b><s>погасло само</s></div>
+      <div><b>${d(h.created_at)}</b><s>добавлено</s></div>
+      <div><b>${d(h.first_shown_at)}</b><s>первый показ</s></div>
+      <div><b>${d(h.last_shown_at)}</b><s>последний показ</s></div>
+      <div><b>${d(h.learned_at)}</b><s>выучено</s></div>
+      <div><b>${d(h.due_at)}</b><s>следующий показ</s></div>
+    </div>
+    ${days.length ? `<div class="hint">Показы по дням (последние ${days.length}):</div>
+      <div class="bars">${days.map(x =>
+        `<i style="height:${Math.round(x.shown/top*100)}%" title="${x.d}: ${x.shown} показов, ${x.know} «знаю»"></i>`
+      ).join("")}</div>` : ""}
+    ${h.status === "learned"
+      ? `<button class="act" onclick="relearn(${h.id})">Вернуть в изучение</button>` : ""}`;
+  if (box.scrollIntoView) box.scrollIntoView({behavior:"smooth", block:"nearest"});
 }
 
 async function setStatus(id, status){
@@ -674,7 +847,29 @@ async function saveSet(){
 $("#q").addEventListener("keydown", e => { if(e.key === "Enter") loadWords(); });
 $("#ftag").addEventListener("keydown", e => { if(e.key === "Enter") loadWords(); });
 loadStats();
-setInterval(() => { if ($("#tab-stat").classList.contains("on")) loadStats(); }, 30000);
+// ---------- переключатели периода и сортировки выученных ----------
+function segment(boxId, onPick){
+  document.querySelectorAll(`#${boxId} button`).forEach(b => b.onclick = () => {
+    document.querySelectorAll(`#${boxId} button`).forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    onPick(b.dataset);
+  });
+}
+segment("period", d => { STAT_DAYS = +d.d; loadStats(); });
+segment("learnedsort", d => { LEARNED_ORDER = d.o; loadLearned(); });
+
+// ---------- автообновление ----------
+// Обновляется та вкладка, которая открыта, а не только статистика: ответ,
+// данный на карточке минуту назад, должен быть виден без перезагрузки.
+function refreshActive(){
+  if (document.hidden) return;              // вкладка браузера свёрнута — не дёргаем базу
+  if ($("#tab-stat").classList.contains("on")) loadStats();
+  else if ($("#tab-words").classList.contains("on")) loadWords();
+}
+setInterval(refreshActive, 15000);
+// Возврат к окну — самый частый момент «а что там изменилось»: обновляем сразу.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshActive(); });
+window.addEventListener("focus", refreshActive);
 </script>
 </body>
 </html>

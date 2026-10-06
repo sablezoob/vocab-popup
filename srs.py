@@ -78,9 +78,19 @@ def grade(word_id, action):
     else:
         status = "learning"
 
-    c.execute("""UPDATE srs SET ease=?, interval_min=?, due_at=?, reps=?, lapses=?, status=?
+    # Момент перехода в «выучено» записываем один раз: по событиям его потом
+    # не восстановить, а без него не ответить, когда и сколько выучено.
+    learned_at = row["learned_at"] if "learned_at" in row.keys() else ""
+    if status == "learned" and not learned_at:
+        learned_at = db.now_iso()
+    elif status != "learned":
+        learned_at = ""
+
+    c.execute("""UPDATE srs SET ease=?, interval_min=?, due_at=?, reps=?, lapses=?,
+                                status=?, learned_at=?
                  WHERE word_id=?""",
-              (ease, interval, due.isoformat(timespec="seconds"), reps, lapses, status, word_id))
+              (ease, interval, due.isoformat(timespec="seconds"), reps, lapses,
+               status, learned_at, word_id))
     c.commit()
     return status, interval
 
@@ -90,14 +100,33 @@ def set_status(word_id, status):
     c = db.conn()
     if status == "learned":
         due = _now() + timedelta(minutes=30 * DAY)
-        c.execute("""UPDATE srs SET status='learned', interval_min=?, due_at=?
-                     WHERE word_id=?""", (30 * DAY, due.isoformat(timespec="seconds"), word_id))
+        c.execute("""UPDATE srs SET status='learned', interval_min=?, due_at=?,
+                                    learned_at=COALESCE(NULLIF(learned_at,''), ?)
+                     WHERE word_id=?""",
+                  (30 * DAY, due.isoformat(timespec="seconds"), db.now_iso(), word_id))
     elif status == "suspended":
         c.execute("UPDATE srs SET status='suspended' WHERE word_id=?", (word_id,))
     else:
         c.execute("""UPDATE srs SET status='new', interval_min=0, ease=2.5, reps=0,
-                     due_at=? WHERE word_id=?""", (db.now_iso(), word_id))
+                     learned_at='', due_at=? WHERE word_id=?""", (db.now_iso(), word_id))
     c.commit()
+
+
+def relearn(word_id):
+    """Вернуть выученное слово в изучение.
+
+    Счётчик верных ответов обнуляется намеренно. Если его оставить, слово
+    после первого же «Знаю» снова уйдёт в выученные — а вернули его как раз
+    потому, что оно забылось. Ошибки (lapses) и лёгкость сохраняем: это
+    история слова, и она пригодится при следующем расчёте интервала.
+    """
+    c = db.conn()
+    c.execute("""UPDATE srs SET status='learning', reps=0, interval_min=0,
+                                learned_at='', due_at=?, priority_at=?
+                 WHERE word_id=?""", (db.now_iso(), db.now_iso(), word_id))
+    c.commit()
+    return c.execute("SELECT status, reps FROM srs WHERE word_id=?",
+                     (word_id,)).fetchone()
 
 
 def _pick(sql, params=()):
@@ -202,6 +231,17 @@ def next_word():
     p_learning = min(0.40, due_learning / 60.0)
     review_learned = db.get("review_learned", "0") == "1"
     p_learned = min(0.10, due_learned / 60.0) if review_learned else 0.0
+
+    # Возвращённое руками слово показываем первым и ровно один раз вне очереди:
+    # дальше оно живёт по общим правилам.
+    pri = db.conn().execute("""
+        SELECT w.*, s.status, s.interval_min, s.reps
+        FROM words w JOIN srs s ON s.word_id = w.id
+        WHERE s.priority_at != '' AND w.translation != '' AND s.status != 'suspended'
+        ORDER BY s.priority_at LIMIT 1""").fetchone()
+    if pri is not None:
+        db.write("UPDATE srs SET priority_at='' WHERE word_id=?", (pri["id"],))
+        return pri
 
     for exclude in (recent, []):
         r = random.random()
@@ -343,3 +383,77 @@ def stats():
         "shown_total": q("SELECT COUNT(*) FROM events"),
         "no_translation": q("SELECT COUNT(*) FROM words WHERE translation=''"),
     }
+
+
+def learned_words(order="learned_at", limit=0):
+    """Все выученные слова с датой и историей показов.
+
+    Список намеренно полный: раньше показывались последние 12 по номеру
+    в базе, и слово, выученное сегодня, в него не попадало, если его
+    добавили в словарь давно.
+    """
+    col = {"learned_at": "s.learned_at", "word": "w.word",
+           "shown": "shown_cnt", "days": "days_to_learn"}.get(order, "s.learned_at")
+    direction = "ASC" if col == "w.word" else "DESC"
+    sql = f"""
+        SELECT w.id, w.word, w.translation, w.ipa, w.ru_read, w.tags,
+               s.reps, s.lapses,
+               datetime(s.learned_at,'localtime')   learned_at,
+               datetime(s.first_shown_at,'localtime') first_shown_at,
+               datetime(w.created_at,'localtime')   created_at,
+               datetime(s.due_at,'localtime')       due_at,
+               (SELECT COUNT(*) FROM events e WHERE e.word_id=w.id) shown_cnt,
+               (SELECT COUNT(*) FROM events e WHERE e.word_id=w.id AND e.action='know') know_cnt,
+               (SELECT COUNT(*) FROM events e WHERE e.word_id=w.id AND e.action='again') again_cnt,
+               CAST(julianday(NULLIF(s.learned_at,'')) -
+                    julianday(NULLIF(s.first_shown_at,'')) AS INTEGER) days_to_learn
+        FROM srs s JOIN words w ON w.id = s.word_id
+        WHERE s.status = 'learned'
+        ORDER BY {col} {direction}, s.word_id DESC"""
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+    return [dict(r) for r in db.conn().execute(sql)]
+
+
+def word_history(word_id):
+    """Вся история одного слова: когда добавлено, сколько раз показано,
+    что отвечали и в какие дни. Без этого непонятно, почему слово
+    продолжает всплывать."""
+    c = db.conn()
+    row = c.execute(f"""
+        SELECT w.id, w.word, w.translation, w.ipa, w.ru_read, w.tags, w.level,
+               w.example_en, w.example_ru, w.note,
+               COALESCE(s.status,'new') status, COALESCE(s.reps,0) reps,
+               COALESCE(s.lapses,0) lapses, COALESCE(s.ease,2.5) ease,
+               COALESCE(s.interval_min,0) interval_min,
+               datetime(w.created_at,'localtime')     created_at,
+               datetime(s.first_shown_at,'localtime') first_shown_at,
+               datetime(s.learned_at,'localtime')     learned_at,
+               datetime(s.due_at,'localtime')         due_at
+        FROM words w LEFT JOIN srs s ON s.word_id = w.id
+        WHERE w.id = ?""", (word_id,)).fetchone()
+    if row is None:
+        return None
+    out = dict(row)
+
+    counts = {r["action"]: r["n"] for r in c.execute(
+        "SELECT action, COUNT(*) n FROM events WHERE word_id=? GROUP BY action",
+        (word_id,))}
+    out["shown_cnt"] = sum(counts.values())
+    out["know_cnt"] = counts.get("know", 0)
+    out["again_cnt"] = counts.get("again", 0)
+    out["skip_cnt"] = counts.get("skip", 0)
+
+    out["last_shown_at"] = (c.execute(
+        "SELECT datetime(MAX(shown_at),'localtime') FROM events WHERE word_id=?",
+        (word_id,)).fetchone()[0] or "")
+    out["by_day"] = [dict(r) for r in c.execute(f"""
+        SELECT {LOCAL_DAY} d, COUNT(*) shown, SUM(action='know') know,
+               SUM(action='again') again
+        FROM events WHERE word_id=? GROUP BY d ORDER BY d DESC LIMIT 60""",
+        (word_id,))]
+    out["recent"] = [dict(r) for r in c.execute("""
+        SELECT datetime(shown_at,'localtime') at, action, source,
+               ROUND(ms_visible/1000.0, 1) seconds
+        FROM events WHERE word_id=? ORDER BY id DESC LIMIT 25""", (word_id,))]
+    return out

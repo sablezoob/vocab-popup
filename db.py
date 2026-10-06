@@ -170,6 +170,19 @@ EVENT_COLUMNS = {
     "source": "TEXT DEFAULT 'popup'",
 }
 
+# Когда слово перешло в «выучено». По событиям это не восстановить задним
+# числом точно: порог «сколько верных ответов» мог меняться, да и сам момент
+# перехода в events не записан — там лежат ответы, а не смены статуса.
+SRS_COLUMNS = {
+    "learned_at": "TEXT DEFAULT ''",
+    "first_shown_at": "TEXT DEFAULT ''",
+    # Слово, которое пользователь руками вернул в изучение. Обычная очередь
+    # показала бы его часов через шесть: свежеотвеченное блокируется списком
+    # недавних, а дальше на один созревший повтор приходится меньше двух
+    # процентов показов. Явное действие должно срабатывать заметно быстрее.
+    "priority_at": "TEXT DEFAULT ''",
+}
+
 EXTRA_COLUMNS = {
     "v2": "TEXT DEFAULT ''",
     "v3": "TEXT DEFAULT ''",
@@ -191,6 +204,42 @@ def ensure_columns():
     for name, decl in EVENT_COLUMNS.items():
         if name not in have_ev:
             c.execute(f"ALTER TABLE events ADD COLUMN {name} {decl}")
+    have_srs = {r["name"] for r in c.execute("PRAGMA table_info(srs)")}
+    added_srs = [n for n in SRS_COLUMNS if n not in have_srs]
+    for name in added_srs:
+        c.execute(f"ALTER TABLE srs ADD COLUMN {name} {SRS_COLUMNS[name]}")
+    c.commit()
+    if added_srs:
+        backfill_history()
+
+
+def backfill_history():
+    """Восстанавливает по событиям то, что раньше не записывалось.
+
+    Первый показ виден в events прямо. Момент «выучено» — приблизительно:
+    берём ответ «знаю», после которого их накопилось столько, сколько сейчас
+    требует настройка. Для слов, выученных при другом пороге, дата сдвинется,
+    но это честнее пустой колонки: иначе весь прошлый прогресс останется
+    без дат и не попадёт ни в один отчёт.
+    """
+    c = conn()
+    c.execute("""UPDATE srs SET first_shown_at = COALESCE(
+                     (SELECT MIN(e.shown_at) FROM events e WHERE e.word_id = srs.word_id), '')
+                 WHERE first_shown_at = ''""")
+    need = max(1, get_int("know_to_learn", 2))
+    # Трёхступенчатый запас: нужный по счёту «знаю»; если событий меньше,
+    # чем повторов (в первые дни писались не все ответы) — последний «знаю»;
+    # если и его нет — последний показ вообще.
+    c.execute(f"""UPDATE srs SET learned_at = COALESCE(
+                     (SELECT e.shown_at FROM events e
+                      WHERE e.word_id = srs.word_id AND e.action = 'know'
+                      ORDER BY e.shown_at LIMIT 1 OFFSET {need - 1}),
+                     (SELECT MAX(e.shown_at) FROM events e
+                      WHERE e.word_id = srs.word_id AND e.action = 'know'),
+                     (SELECT MAX(e.shown_at) FROM events e
+                      WHERE e.word_id = srs.word_id),
+                     '')
+                  WHERE status = 'learned' AND learned_at = ''""")
     c.commit()
 
 
@@ -351,6 +400,11 @@ def log_event(word_id, action, ms_visible=0, source="popup"):
     write("""INSERT INTO events(word_id, shown_at, action, ms_visible, source)
              VALUES (?,?,?,?,?)""",
           (word_id, now_iso(), action, int(ms_visible), source))
+    # Дата первой встречи со словом. Нужна, чтобы считать, сколько дней оно
+    # в работе: по одному только created_at этого не видно — слово может
+    # пролежать в словаре месяц, ни разу не показавшись.
+    write("UPDATE srs SET first_shown_at=? WHERE word_id=? AND first_shown_at=''",
+          (now_iso(), word_id))
 
 
 def log_session(mode, deck, total, right_cnt, wrong_cnt, skipped, seconds, started_at=None):
