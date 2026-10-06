@@ -1,0 +1,16 @@
+# Колода: frequency — как часто что-то происходит
+# формат: слово | перевод | /транскрипция/ | пример EN | пример RU
+#
+# Эти наречия стоят перед смысловым глаголом (I always wait), но после
+# глагола to be (I am always late) — порядок слов важнее, чем сами слова.
+#
+# В конспекте «rare» подписано как «редко». Это прилагательное: редкий,
+# нечастый. Наречие «редко» — rarely, поэтому в колоде оба.
+
+always | всегда | /ˈɔːlweɪz/ | She always drinks tea in the morning. | Она всегда пьёт чай по утрам.
+usually | обычно | /ˈjuːʒuəli/ | I usually work from home. | Обычно я работаю из дома.
+often | часто | /ˈɒfn/ | We often catch up after work. | Мы часто пересекаемся после работы.
+sometimes | иногда | /ˈsʌmtaɪmz/ | Sometimes I feel anxious before a call. | Иногда я тревожусь перед звонком.
+rarely | редко | /ˈreəli/ | He rarely answers the phone. | Он редко отвечает на звонки.
+rare | редкий, нечастый | /reə/ | This is a rare species. | Это редкий вид.
+never | никогда | /ˈnevə/ | I never wait more than ten minutes. | Я никогда не жду больше десяти минут.

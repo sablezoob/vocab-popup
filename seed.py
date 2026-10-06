@@ -18,6 +18,7 @@ DECKS = {
     "present_perfect.txt": ("tense:present-perfect", "B1", False),
     "lesson_01.txt": ("lesson", "", False),
     "lesson_02.txt": ("lesson-02", "", False),
+    "frequency.txt": ("frequency", "A2", False),
     # три формы дают более полную карточку, чем уже лежащая в базе, — перезаписываем
     "verbs_3forms.txt": ("verbs-3forms", "A2", True),
 }
@@ -43,7 +44,8 @@ def load(filename, tags, level, overwrite=False):
                 trans, v2, v3, ipa, ipa2, ipa3 = verbforms.parse(trans, ipa)
             wid, res = db.add_word(p["word"], ipa=ipa, translation=trans,
                                    example_en=p["example_en"], example_ru=p["example_ru"],
-                                   level=level, tags=tags, overwrite=overwrite)
+                                   level=level, tags=tags, overwrite=overwrite,
+                                   ru_read=p.get("ru_read", ""))
             if wid and v2:
                 db.set_forms(wid, v2, v3, ipa2, ipa3)
             if res == "created":

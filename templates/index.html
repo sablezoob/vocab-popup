@@ -48,6 +48,7 @@
   tr:hover td{background:#1a1e26}
   .w{font-weight:600;font-size:15px}
   .ipa{color:#7fd4ff;font-size:13px}
+  .ruread{color:var(--ruRead);font-size:13px}
   .tr{color:#ffd479}
   .ex{color:var(--muted);font-size:12px;font-style:italic}
   .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;
@@ -300,8 +301,8 @@ autumn | осень"></textarea>
     </div>
     <div class="row" style="margin-top:14px">
       <div style="flex:2"><label>Модель</label><select id="s_aimodel">
-        <option value="deepseek-ai/deepseek-v4-pro-0813">deepseek-v4-pro (работает)</option>
-        <option value="deepseek-ai/deepseek-v4-flash-0731">deepseek-v4-flash (не отвечает)</option>
+        <option value="deepseek-ai/deepseek-v4.1-flash">deepseek-v4.1-flash</option>
+        <option value="deepseek-ai/deepseek-coder-6.7b-instruct">deepseek-coder-6.7b</option>
       </select></div>
       <div><label>Примеров на слово</label><input id="s_aisent" type="number" min="1" max="10"></div>
       <div><label>Пополнять, если новых меньше</label><input id="s_aimin" type="number" min="0" max="200"></div>
@@ -565,6 +566,7 @@ async function loadWords(){
   $("#words tbody").innerHTML = rows.length ? rows.map(r => `
     <tr data-id="${r.id}">
       <td><div class="w">${esc(r.word)}</div><div class="ipa">${esc(r.ipa)}</div>
+          ${r.ru_read ? `<div class="ruread">${esc(r.ru_read)}</div>` : ""}
           ${r.tags ? `<div class="hint">${esc(r.tags)}</div>` : ""}</td>
       <td class="tr">${esc(r.translation) || '<span class="bad">— нет перевода —</span>'}</td>
       <td><div class="ex">${esc(r.example_en)}</div><div class="hint">${esc(r.example_ru)}</div></td>
@@ -614,7 +616,7 @@ async function loadSet(){
   $("#s_qen").value = s.quiet_enabled; $("#s_paused").value = s.paused;
   $("#s_ai").value = s.ai_enabled || "0";
   $("#s_aikey").value = s.ai_key || "";
-  $("#s_aimodel").value = s.ai_model || "deepseek-ai/deepseek-v4-pro-0813";
+  $("#s_aimodel").value = s.ai_model || "deepseek-ai/deepseek-v4.1-flash";
   $("#s_aisent").value = s.ai_sentences_per_word || "4";
   $("#s_aimin").value = s.ai_min_new_words || "10";
   $("#s_aibatch").value = s.ai_words_per_batch || "20";

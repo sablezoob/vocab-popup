@@ -11,8 +11,8 @@
 # --- чувства и состояния ---
 curious | любопытный, интересующийся | /ˈkjʊəriəs/ | I am curious about how it works. | Мне любопытно, как это работает.
 anxious | тревожный, беспокойный | /ˈæŋkʃəs/ | She feels anxious before every exam. | Она тревожится перед каждым экзаменом.
-hopeful | надеющийся, полный надежды | /ˈhəʊpfl/ | We are hopeful that the answer comes today. | Мы надеемся, что ответ придёт сегодня.
-grateful | благодарный | /ˈɡreɪtfl/ | I am grateful for your advice. | Я благодарен за твой совет.
+hopeful | надеющийся, полный надежды | /ˈhəʊpfʊl/ | We are hopeful that the answer comes today. | Мы надеемся, что ответ придёт сегодня.
+grateful | благодарный | /ˈɡreɪtfʊl/ | I am grateful for your advice. | Я благодарен за твой совет.
 frustrated | разочарованный, раздражённый | /frʌˈstreɪtɪd/ | He was frustrated by the slow answer. | Он был раздражён медленным ответом.
 confident | уверенный | /ˈkɒnfɪdənt/ | She is confident in her decision. | Она уверена в своём решении.
 ashamed | пристыженный, неловко за себя | /əˈʃeɪmd/ | I am ashamed of my mistake. | Мне стыдно за свою ошибку.

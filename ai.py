@@ -56,7 +56,7 @@ def _ask(prompt, max_tokens=MAX_TOKENS, temperature=0.8):
 
 def _call(client, prompt, max_tokens, temperature):
     r = client.chat.completions.create(
-        model=db.get("ai_model") or "deepseek-ai/deepseek-v4-pro-0813",
+        model=db.get("ai_model") or "deepseek-ai/deepseek-v4.1-flash",
         messages=[{"role": "user", "content": prompt}],
         temperature=temperature, top_p=0.95, max_tokens=max_tokens,
         # рассуждения нам не нужны: они втрое удлиняют и без того долгий ответ

@@ -7,7 +7,7 @@
 import theme
 
 TEXT_COLORS = ["text", "word", "dim", "muted", "example", "exampleRu",
-               "ipa", "translate", "formTag", "formIpa", "mode"]
+               "ipa", "ruRead", "translate", "formTag", "formIpa", "mode"]
 
 
 def test_every_text_color_is_readable():

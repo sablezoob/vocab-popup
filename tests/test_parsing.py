@@ -104,3 +104,42 @@ def test_every_seed_line_is_usable():
                 assert low not in seen, f"{where}: слово {low} уже есть в колоде"
                 seen.add(low)
         assert seen, f"колода {filename} пустая"
+
+
+def test_lesson_notes_can_be_pasted_as_is():
+    """Список с урока приходит в виде «Always- всегда (олвэйз)».
+    Переписывать его под формат с чертой — лишняя работа и лишние опечатки."""
+    p = parse_line("Always- всегда (олвэйз)")
+    assert p["word"] == "Always"
+    assert p["translation"] == "всегда"
+    assert p["ru_read"] == "олвэйз"
+
+    p = parse_line("Queue — очередь [кью]")
+    assert (p["word"], p["translation"], p["ru_read"]) == ("Queue", "очередь", "кью")
+
+    # слово и перевод без всякого знака между ними
+    p = parse_line("-mindless бездумный (майндлэс)")
+    assert (p["word"], p["translation"], p["ru_read"]) == ("mindless", "бездумный", "майндлэс")
+
+    # фраза из нескольких слов не должна рассыпаться по первому пробелу
+    p = parse_line("artificial intelligence — искусственный интеллект")
+    assert p["word"] == "artificial intelligence"
+
+
+def test_dash_inside_english_word_is_not_a_separator():
+    """«catch-up» — одно слово, а не слово и перевод."""
+    assert parse_line("catch-up")["word"] == "catch-up"
+    assert parse_line("co-op | кооператив")["word"] == "co-op"
+
+
+def test_explanation_in_brackets_is_not_a_reading():
+    """В тех же скобках может стоять пояснение. Чтение идёт слог в слог
+    со словом, пояснение всегда длиннее — по этому их и различаем."""
+    p = parse_line("I will — я буду (глагол для будущего времени)")
+    assert p["ru_read"] == ""
+    assert "глагол" in p["translation"]
+
+
+def test_cyrillic_in_brackets_is_not_mistaken_for_ipa():
+    p = parse_line("calm | спокойный | [кам]")
+    assert p["ru_read"] == "кам" and p["ipa"] == ""

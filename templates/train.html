@@ -39,6 +39,7 @@
   .kicker{color:var(--accent);font-size:11px;letter-spacing:.7px;text-transform:uppercase}
   .word{font-size:38px;font-weight:600;margin:10px 0 4px}
   .ipa{color:#7fd4ff;font-size:17px}
+  .ruread{color:var(--ruRead);font-size:19px;margin-top:2px}
   .trans{color:var(--warn);font-size:22px;margin-top:12px}
   .ex{color:#c3c9d6;font-size:15px;margin-top:14px}
   .exru{color:var(--muted);font-size:14px}
@@ -249,6 +250,7 @@ function render(){
   } else {
     h += `<div class="word">${esc(c.word)}</div>`;
     if (c.ipa && !isVerb) h += `<div class="ipa">${esc(c.ipa)}</div>`;
+    if (c.ru_read && !isVerb) h += `<div class="ruread">${esc(c.ru_read)}</div>`;
     // в режиме форм перевод — не ответ, а подсказка о каком слове речь
     if (mode === "show" || mode === "forms" || (revealed && mode !== "quiz"))
       h += `<div class="trans">${esc(c.translation)}</div>`;
@@ -276,13 +278,13 @@ function render(){
 }
 
 function formsHtml(c, hidden){
-  const cell = (t, w, i, cls="") =>
+  const cell = (t, w, i, r, cls="") =>
     `<div class="${cls}"><div class="t">${t}</div><div class="w">${esc(w)}</div>
-     <div class="i">${esc(i)}</div></div>`;
+     <div class="i">${esc(i)}</div><div class="ruread" style="font-size:13px">${esc(r)}</div></div>`;
   return `<div class="forms">
-    ${cell("V1", c.word, c.ipa||"")}
-    ${cell("V2", hidden ? "?" : c.v2, hidden ? "" : (c.ipa2||""))}
-    ${cell("V3", hidden ? "?" : c.v3, hidden ? "" : (c.ipa3||""), "v3")}
+    ${cell("V1", c.word, c.ipa||"", c.ru_read||"")}
+    ${cell("V2", hidden ? "?" : c.v2, hidden ? "" : (c.ipa2||""), hidden ? "" : (c.ru_read2||""))}
+    ${cell("V3", hidden ? "?" : c.v3, hidden ? "" : (c.ipa3||""), hidden ? "" : (c.ru_read3||""), "v3")}
   </div>`;
 }
 
@@ -315,6 +317,7 @@ function render2(){
   const c = cards[idx], isVerb = !!c.v2;
   let h = `<div class="kicker">Ответ</div><div class="word">${esc(c.word)}</div>`;
   if (c.ipa && !isVerb) h += `<div class="ipa">${esc(c.ipa)}</div>`;
+  if (c.ru_read && !isVerb) h += `<div class="ruread">${esc(c.ru_read)}</div>`;
   if (isVerb) h += formsHtml(c, false);
   h += `<div class="trans">${esc(c.translation)}</div>`;
   if (c.example_en) h += `<div class="ex">${esc(c.example_en)}</div>`;

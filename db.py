@@ -113,7 +113,7 @@ DEFAULTS = {
     "ai_enabled": "0",              # 1 = разрешить обращения к нейросети
     "ai_key": "",                   # ключ nvapi-… хранится только здесь, в базе
     "ai_base_url": "https://integrate.api.nvidia.com/v1",
-    "ai_model": "deepseek-ai/deepseek-v4-pro-0813",
+    "ai_model": "deepseek-ai/deepseek-v4.1-flash",
     "ai_sentences_per_word": "4",   # сколько примеров держать на слово
     "ai_min_new_words": "10",       # если новых слов меньше — дозаказать ещё
     "ai_words_per_batch": "20",     # сколько слов просить за раз
@@ -175,6 +175,9 @@ EXTRA_COLUMNS = {
     "v3": "TEXT DEFAULT ''",
     "ipa2": "TEXT DEFAULT ''",
     "ipa3": "TEXT DEFAULT ''",
+    # Русское чтение. Обычно пустое — его считает ruread по транскрипции.
+    # Заполняется руками, когда готовый пересчёт не устраивает.
+    "ru_read": "TEXT DEFAULT ''",
 }
 
 
@@ -245,7 +248,8 @@ def merge_tags(old, new):
 
 
 def add_word(word, ipa="", translation="", example_en="", example_ru="",
-             level="", tags="", note="", enriched=None, overwrite=False):
+             level="", tags="", note="", enriched=None, overwrite=False,
+             ru_read=""):
     """Добавляет слово.
 
     По умолчанию существующее слово только дополняется — пустые поля заполняются,
@@ -266,7 +270,7 @@ def add_word(word, ipa="", translation="", example_en="", example_ru="",
         sets, params = [], []
         for field, value in (("ipa", ipa), ("translation", translation),
                              ("example_en", example_en), ("example_ru", example_ru),
-                             ("level", level)):
+                             ("level", level), ("ru_read", ru_read)):
             if value:
                 sets.append(f"{field}=?")
                 params.append(value)
@@ -286,18 +290,19 @@ def add_word(word, ipa="", translation="", example_en="", example_ru="",
                 example_en  = CASE WHEN example_en=''  THEN ? ELSE example_en  END,
                 example_ru  = CASE WHEN example_ru=''  THEN ? ELSE example_ru  END,
                 level       = CASE WHEN level=''       THEN ? ELSE level       END,
+                ru_read     = CASE WHEN ru_read=''     THEN ? ELSE ru_read     END,
                 tags        = CASE WHEN tags=''        THEN ? ELSE tags        END
             WHERE id=?""",
-            (ipa, translation, example_en, example_ru, level, tags, wid))
+            (ipa, translation, example_en, example_ru, level, ru_read, tags, wid))
         c.execute("UPDATE words SET enriched=1 WHERE id=? AND ipa!='' AND translation!=''", (wid,))
         c.commit()
         return wid, "updated"
     cur = c.execute("""
         INSERT INTO words(word, ipa, translation, example_en, example_ru,
-                          level, tags, note, enriched, created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                          level, tags, note, enriched, created_at, ru_read)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
         (word, ipa, translation, example_en, example_ru, level, tags, note,
-         int(enriched), now_iso()))
+         int(enriched), now_iso(), ru_read))
     wid = cur.lastrowid
     c.execute("INSERT INTO srs(word_id, due_at, status) VALUES (?, ?, 'new')", (wid, now_iso()))
     c.commit()

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
 import aiworker
 import db
 import quiz
+import ruread
 import theme
 import tts
 
@@ -34,6 +35,7 @@ UI_FONT = theme.UI_FONT
 C_BG         = theme.c("card")
 C_WORD       = theme.c("word")
 C_IPA        = theme.c("ipa")
+C_READ       = theme.c("ruRead")
 C_TRANS      = theme.c("translate")
 C_EXAMPLE    = theme.c("example")
 C_EXAMPLE_RU = theme.c("exampleRu")
@@ -73,6 +75,8 @@ def build_style(k=1.0):
                   border-radius: {px(14)}px; }}
     #word       {{ color: {C_WORD}; font-size: {px(27)}px; font-weight: 600; }}
     #ipa        {{ color: {C_IPA}; font-size: {px(16)}px; }}
+    #ruread     {{ color: {C_READ}; font-size: {px(17)}px;
+                  margin: {px(2)}px 0 {px(2)}px 0; }}
     #trans      {{ color: {C_TRANS}; font-size: {px(19)}px;
                   margin: {px(6)}px 0 {px(9)}px 0; }}
     #hint       {{ color: #7b8496; font-size: {px(16)}px; font-style: italic;
@@ -89,6 +93,7 @@ def build_style(k=1.0):
     #formWord   {{ color: #eef1f6; font-size: {px(17)}px; font-weight: 600; }}
     #formWordV3 {{ color: {C_TRANS}; font-size: {px(17)}px; font-weight: 600; }}
     #formIpa    {{ color: {C_FORM_IPA}; font-size: {px(12)}px; }}
+    #formRead   {{ color: {C_READ}; font-size: {px(13)}px; }}
     #feedOk     {{ color: #3ddc91; font-size: {px(14)}px; font-weight: 600; }}
     #feedBad    {{ color: #ff6b6b; font-size: {px(14)}px; font-weight: 600; }}
     #modeTitle  {{ color: {C_IPA}; font-size: {px(11)}px; letter-spacing: 1px; }}
@@ -189,6 +194,11 @@ class Popup(QWidget):
 
         self.l_ipa = QLabel(objectName="ipa")
         v.addWidget(self.l_ipa)
+
+        # Чтение русскими буквами стоит под транскрипцией и крупнее её:
+        # пока IPA не выучена, читают именно эту строку.
+        self.l_read = QLabel(objectName="ruread")
+        v.addWidget(self.l_read)
 
         self.forms_box = self._build_forms()
         v.addWidget(self.forms_box)
@@ -358,19 +368,23 @@ class Popup(QWidget):
         g.setContentsMargins(12, 8, 12, 8)
         g.setHorizontalSpacing(14)
         g.setVerticalSpacing(1)
-        self.form_tags, self.form_words, self.form_ipas = [], [], []
+        self.form_tags, self.form_words = [], []
+        self.form_ipas, self.form_reads = [], []
         for col, tag in enumerate(("V1", "V2", "V3")):
             # V3 выделена цветом: именно она нужна для Present Perfect
             t = QLabel(tag, objectName="formTagV3" if col == 2 else "formTag")
             w = QLabel(objectName="formWordV3" if col == 2 else "formWord")
             i = QLabel(objectName="formIpa")
+            rd = QLabel(objectName="formRead")
             g.addWidget(t, 0, col)
             g.addWidget(w, 1, col)
             g.addWidget(i, 2, col)
+            g.addWidget(rd, 3, col)
             g.setColumnStretch(col, 1)
             self.form_tags.append(t)
             self.form_words.append(w)
             self.form_ipas.append(i)
+            self.form_reads.append(rd)
         return box
 
     def _fill_forms(self, hidden=False):
@@ -380,6 +394,8 @@ class Popup(QWidget):
             hide = hidden and col > 0
             self.form_words[col].setText("?" if hide else (word or ""))
             self.form_ipas[col].setText("" if hide else (ipa or ""))
+            self.form_reads[col].setText(
+                "" if hide else ruread.from_ipa(ipa, word))
 
     # ---------- показ ----------
     def show_word(self, row):
@@ -494,6 +510,10 @@ class Popup(QWidget):
         self.l_ipa.setText(r["ipa"] or "")
         self.l_ipa.setVisible(bool(r["ipa"]) and not self.is_verb
                               and m in (SHOW, SELFTEST, FORMS))
+        reading = ruread.show(r)
+        self.l_read.setText(reading)
+        self.l_read.setVisible(bool(reading) and not self.is_verb
+                               and m in (SHOW, SELFTEST, FORMS))
         self.forms_box.setVisible(self.is_verb and m in (SHOW, FORMS))
         # Пример виден только в режиме показа: в проверке он содержит ответ
         # («He has drawn a portrait» выдаёт третью форму).

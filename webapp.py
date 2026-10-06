@@ -11,13 +11,52 @@ import ai
 import aiworker
 import db
 import quiz
+import ruread
 import srs
 import theme
 
 app = Flask(__name__)
 
 # Разделители намеренно узкие: тире не годится — оно живёт внутри примеров.
-SPLIT_RE = re.compile(r"\s*(?:\||\t|;;)\s*")
+SPLIT_RE = re.compile(r"\s*(?:\||	|;;)\s*")
+# Запись из конспекта: «Always- всегда (олвэйз)». Тире тут разделитель, но
+# только когда справа кириллица, — иначе под раздачу попали бы catch-up и co-op.
+DASH_RE = re.compile(r"^([A-Za-z][A-Za-z'’ .]*?)\s*[-–—:]\s*(?=.*[а-яёА-ЯЁ])(.+)$")
+# Та же запись, но без тире: «mindless бездумный (майндлэс)». Латиница слева,
+# кириллица справа — границу видно и без знака.
+GAP_RE = re.compile(r"^([A-Za-z][A-Za-z'’ .]*?)\s+(?=[а-яёА-ЯЁ])(.+)$")
+CYRILLIC = re.compile(r"[а-яёА-ЯЁ]")
+# Чтение русскими буквами в скобках, в конце перевода
+RU_READ_RE = re.compile(r"[\(\[]\s*([^()\[\]]*[а-яёА-ЯЁ][^()\[\]]*?)\s*[\)\]]\s*$")
+
+
+def _looks_like_reading(text, word):
+    """Отличает чтение от пояснения в тех же скобках.
+
+    «would — бы (в сокращённой форме пишется как I'd)» — это пояснение,
+    а «always — всегда (олвэйз)» — чтение. Разница в размере: чтение идёт
+    слог в слог со словом, пояснение всегда длиннее и многословнее.
+    """
+    text = (text or "").strip()
+    if not text or "," in text or re.search(r"[A-Za-z]", text):
+        return False
+    return (len(text.split()) <= len(word.split())
+            and len(text) <= 2.5 * len(word) + 4)
+
+
+def _with_reading(row):
+    """Строка словаря для веба: пустая колонка ru_read заменяется пересчётом.
+
+    В базе чтение хранится только там, где его записали руками, — считать
+    его на каждом слове заранее значило бы держать копию, которая устареет
+    при первой же правке правил пересчёта.
+    """
+    d = dict(row)
+    d["ru_read"] = ruread.show(row)
+    for n in ("2", "3"):
+        if d.get("v" + n):
+            d["ru_read" + n] = ruread.from_ipa(d.get("ipa" + n), d["v" + n])
+    return d
 
 
 def parse_line(line):
@@ -26,19 +65,40 @@ def parse_line(line):
     Поддерживает: `word`, `word | перевод`, `word | перевод | /ipa/`,
     `word | перевод | /ipa/ | example en | пример ру`.
     Разделитель — вертикальная черта, таб или `;;`.
+
+    Отдельно понимает запись из конспекта — `always - всегда (олвэйз)`, —
+    чтобы список с урока можно было вставить в дашборд как есть, не
+    переписывая под формат. Скобки с кириллицей внутри любой части
+    читаются как русское чтение.
     """
-    parts = [p.strip() for p in SPLIT_RE.split(line.strip()) if p.strip()]
+    line = line.strip().lstrip("-–—•*·").strip()
+    if not line:
+        return None
+    parts = [p.strip() for p in SPLIT_RE.split(line) if p.strip()]
     if not parts:
         return None
-    out = {"word": parts[0], "translation": "", "ipa": "",
+    if len(parts) == 1:
+        m = DASH_RE.match(parts[0]) or GAP_RE.match(parts[0])
+        if m:
+            parts = [m.group(1).strip(), m.group(2).strip()]
+    out = {"word": parts[0], "translation": "", "ipa": "", "ru_read": "",
            "example_en": "", "example_ru": ""}
     rest = parts[1:]
-    # IPA может стоять в любой позиции — узнаём по слешам или квадратным скобкам
+    # IPA может стоять в любой позиции — узнаём по слешам или квадратным
+    # скобкам. Кириллица внутри скобок — не IPA, а русское чтение.
     for p in list(rest):
-        if (p.startswith("/") and p.endswith("/")) or (p.startswith("[") and p.endswith("]")):
+        wrapped = ((p.startswith("/") and p.endswith("/"))
+                   or (p.startswith("[") and p.endswith("]")))
+        if wrapped and not CYRILLIC.search(p):
             out["ipa"] = p
             rest.remove(p)
             break
+    for i, p in enumerate(rest):
+        m = RU_READ_RE.search(p)
+        if m and not out["ru_read"] and _looks_like_reading(m.group(1), out["word"]):
+            out["ru_read"] = m.group(1).strip()
+            rest[i] = p[:m.start()].strip()
+    rest = [p for p in rest if p]
     if rest:
         out["translation"] = rest[0]
     if len(rest) > 1:
@@ -84,7 +144,7 @@ def api_session():
         rows = srs.session_words(limit=limit, tag=tag, only_verbs=(mode == "forms"))
     out = []
     for r in rows:
-        d = dict(r)
+        d = _with_reading(r)
         if mode == "quiz":
             d["options"] = quiz.translation_options(r)
         elif mode == "forms":
@@ -394,7 +454,7 @@ def api_words():
         sql += " AND w.tags LIKE ?"
         params.append(f"%{tag}%")
     sql += " ORDER BY w.created_at DESC, w.id DESC LIMIT 800"
-    return jsonify([dict(r) for r in db.conn().execute(sql, params)])
+    return jsonify([_with_reading(r) for r in db.conn().execute(sql, params)])
 
 
 @app.post("/api/import")
@@ -414,7 +474,7 @@ def api_import():
             continue
         _, res = db.add_word(p["word"], ipa=p["ipa"], translation=p["translation"],
                              example_en=p["example_en"], example_ru=p["example_ru"],
-                             level=level, tags=tags)
+                             level=level, tags=tags, ru_read=p["ru_read"])
         if res == "created":
             created += 1
         elif res == "updated":
@@ -428,7 +488,7 @@ def api_import():
 def api_word_update(wid):
     d = request.get_json(force=True)
     fields = ["word", "ipa", "translation", "example_en", "example_ru",
-              "level", "tags", "note"]
+              "level", "tags", "note", "ru_read"]
     sets, params = [], []
     for f in fields:
         if f in d:
@@ -502,7 +562,7 @@ def export_csv():
 
     buf = _io.StringIO()
     w = csv.writer(buf, delimiter=chr(9), lineterminator=chr(10))
-    w.writerow(["word", "translation", "ipa", "v2", "v3",
+    w.writerow(["word", "translation", "ipa", "ru_read", "v2", "v3",
                 "example_en", "example_ru", "tags", "status", "reps"])
     rows = db.conn().execute(
         """SELECT w.word, w.translation, w.ipa, w.v2, w.v3, w.tags,
@@ -514,7 +574,8 @@ def export_csv():
            FROM words w LEFT JOIN srs s ON s.word_id = w.id
            WHERE w.translation != '' ORDER BY w.word COLLATE NOCASE""")
     for r in rows:
-        w.writerow([r["word"], r["translation"], r["ipa"], r["v2"], r["v3"],
+        w.writerow([r["word"], r["translation"], r["ipa"], ruread.show(r),
+                    r["v2"], r["v3"],
                     r["ex_en"] or "", r["ex_ru"] or "", r["tags"],
                     r["status"], r["reps"]])
     data = buf.getvalue()
