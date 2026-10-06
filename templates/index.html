@@ -301,8 +301,9 @@ autumn | осень"></textarea>
     </div>
     <div class="row" style="margin-top:14px">
       <div style="flex:2"><label>Модель</label><select id="s_aimodel">
-        <option value="deepseek-ai/deepseek-v4.1-flash">deepseek-v4.1-flash</option>
-        <option value="deepseek-ai/deepseek-coder-6.7b-instruct">deepseek-coder-6.7b</option>
+        <option value="nvidia/nemotron-3-super-120b-a12b">nemotron-3-super-120b (быстрая)</option>
+        <option value="openai/gpt-oss-20b">gpt-oss-20b (медленнее, тоже отвечает)</option>
+        <option value="deepseek-ai/deepseek-v4.1-flash">deepseek-v4.1-flash (не отвечает)</option>
       </select></div>
       <div><label>Примеров на слово</label><input id="s_aisent" type="number" min="1" max="10"></div>
       <div><label>Пополнять, если новых меньше</label><input id="s_aimin" type="number" min="0" max="200"></div>
@@ -616,7 +617,7 @@ async function loadSet(){
   $("#s_qen").value = s.quiet_enabled; $("#s_paused").value = s.paused;
   $("#s_ai").value = s.ai_enabled || "0";
   $("#s_aikey").value = s.ai_key || "";
-  $("#s_aimodel").value = s.ai_model || "deepseek-ai/deepseek-v4.1-flash";
+  $("#s_aimodel").value = s.ai_model || "nvidia/nemotron-3-super-120b-a12b";
   $("#s_aisent").value = s.ai_sentences_per_word || "4";
   $("#s_aimin").value = s.ai_min_new_words || "10";
   $("#s_aibatch").value = s.ai_words_per_batch || "20";

@@ -113,7 +113,7 @@ DEFAULTS = {
     "ai_enabled": "0",              # 1 = разрешить обращения к нейросети
     "ai_key": "",                   # ключ nvapi-… хранится только здесь, в базе
     "ai_base_url": "https://integrate.api.nvidia.com/v1",
-    "ai_model": "deepseek-ai/deepseek-v4.1-flash",
+    "ai_model": "nvidia/nemotron-3-super-120b-a12b",
     "ai_sentences_per_word": "4",   # сколько примеров держать на слово
     "ai_min_new_words": "10",       # если новых слов меньше — дозаказать ещё
     "ai_words_per_batch": "20",     # сколько слов просить за раз
