@@ -19,6 +19,7 @@ DECKS = {
     "lesson_01.txt": ("lesson", "", False),
     "lesson_02.txt": ("lesson-02", "", False),
     "frequency.txt": ("frequency", "A2", False),
+    "lesson_03.txt": ("lesson-03", "", False),
     # три формы дают более полную карточку, чем уже лежащая в базе, — перезаписываем
     "verbs_3forms.txt": ("verbs-3forms", "A2", True),
 }

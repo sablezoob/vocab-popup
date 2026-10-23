@@ -143,3 +143,19 @@ def test_explanation_in_brackets_is_not_a_reading():
 def test_cyrillic_in_brackets_is_not_mistaken_for_ipa():
     p = parse_line("calm | спокойный | [кам]")
     assert p["ru_read"] == "кам" and p["ipa"] == ""
+
+
+def test_clarification_in_the_translation_is_not_a_reading():
+    """«agriculture | сельское хозяйство (отрасль)» — скобки уточняют смысл.
+
+    В строке с чертами чтение занимает отдельное поле целиком; скобки
+    посреди перевода принимать за произношение нельзя. В записи из
+    конспекта разделителей нет, и там хвост в скобках — как раз чтение.
+    """
+    p = parse_line("agriculture | сельское хозяйство (отрасль) | /ˈæɡrɪkʌltʃə/")
+    assert p["ru_read"] == ""
+    assert p["translation"] == "сельское хозяйство (отрасль)"
+    assert p["ipa"] == "/ˈæɡrɪkʌltʃə/"
+
+    # то же слово, но записанное как в конспекте
+    assert parse_line("agriculture — сельское хозяйство (эгрикалчэ)")["ru_read"] == "эгрикалчэ"

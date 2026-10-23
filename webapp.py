@@ -70,8 +70,14 @@ def parse_line(line):
 
     Отдельно понимает запись из конспекта — `always - всегда (олвэйз)`, —
     чтобы список с урока можно было вставить в дашборд как есть, не
-    переписывая под формат. Скобки с кириллицей внутри любой части
-    читаются как русское чтение.
+    переписывая под формат.
+
+    Где искать русское чтение, зависит от того, как записана строка.
+    В конспекте разделителей нет, и чтение дописано в хвост перевода.
+    В строке с вертикальными чертами так делать нельзя: там скобки в
+    переводе — это уточнение смысла («сельское хозяйство (отрасль)»),
+    и принимать его за произношение неверно. Поэтому в формате с чертами
+    чтение должно занимать отдельное поле целиком: `слово | перевод | [кам]`.
     """
     line = line.strip().lstrip("-–—•*·").strip()
     if not line:
@@ -79,7 +85,8 @@ def parse_line(line):
     parts = [p.strip() for p in SPLIT_RE.split(line) if p.strip()]
     if not parts:
         return None
-    if len(parts) == 1:
+    from_notes = len(parts) == 1
+    if from_notes:
         m = DASH_RE.match(parts[0]) or GAP_RE.match(parts[0])
         if m:
             parts = [m.group(1).strip(), m.group(2).strip()]
@@ -97,9 +104,15 @@ def parse_line(line):
             break
     for i, p in enumerate(rest):
         m = RU_READ_RE.search(p)
-        if m and not out["ru_read"] and _looks_like_reading(m.group(1), out["word"]):
-            out["ru_read"] = m.group(1).strip()
-            rest[i] = p[:m.start()].strip()
+        if not m or out["ru_read"]:
+            continue
+        whole_field = m.start() == 0 and m.end() == len(p)
+        if not (from_notes or whole_field):
+            continue        # скобки посреди поля с чертами — уточнение смысла
+        if not _looks_like_reading(m.group(1), out["word"]):
+            continue
+        out["ru_read"] = m.group(1).strip()
+        rest[i] = p[:m.start()].strip()
     rest = [p for p in rest if p]
     if rest:
         out["translation"] = rest[0]
