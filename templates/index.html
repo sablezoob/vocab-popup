@@ -341,6 +341,9 @@ autumn | осень"></textarea>
         <option value="us-female">американский женский</option>
         <option value="us-male">американский мужской</option>
       </select></div>
+      <div style="flex:0"><label>&nbsp;</label>
+        <button class="ghost" onclick="testTts()">Проверить звук</button></div>
+      <div style="flex:0"><label>&nbsp;</label><span class="hint" id="ttsres"></span></div>
       <div><label>Размер карточки</label><select id="s_scale">
         <option value="auto">авто — по размеру экрана</option>
         <option value="0.85">компактный</option>
@@ -788,6 +791,26 @@ async function doImport(){
     headers:{"Content-Type":"application/json"}, body})).json();
   $("#imp").innerHTML = `<span class="ok">добавлено ${r.created}</span>, дополнено ${r.updated}, пропущено ${r.skipped}`;
   if (r.created || r.updated) $("#itext").value = "";
+}
+
+async function testTts(){
+  const btn = event.target, out = $("#ttsres");
+  btn.disabled = true; out.textContent = "проверяю…"; out.className = "hint";
+  try {
+    const r = await (await fetch("/api/tts/test", {method:"POST"})).json();
+    if (r.ok){
+      out.className = "ok";
+      out.textContent = `звук прозвучал · ${r.info.voice}`
+        + (r.info.synthesized ? " · файл только что скачан" : " · из кеша");
+    } else {
+      out.className = "bad";
+      out.textContent = r.error;
+    }
+  } catch (e) {
+    out.className = "bad"; out.textContent = "запрос не прошёл: " + e;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function loadBackup(){

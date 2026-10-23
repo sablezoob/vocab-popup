@@ -5,6 +5,7 @@
 офлайн и мгновенно. Синтез занимает секунду-две, поэтому его нельзя делать
 в потоке интерфейса — карточка бы подвисала.
 """
+import base64
 import hashlib
 import logging
 import os
@@ -40,7 +41,12 @@ def _path(text):
 
 
 def _synthesize(text, path):
-    """Скачивает озвучку. Требует сети, но только при первом обращении."""
+    """Скачивает озвучку. Требует сети, но только при первом обращении.
+
+    Сорвавшийся синтез не должен оставлять в кеше пустой файл: дальше
+    `say` видел бы его и считал слово уже озвученным, а звука не было бы
+    никогда — и починить это можно было бы только руками, через папку.
+    """
     import asyncio
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -53,19 +59,82 @@ def _synthesize(text, path):
 
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(go())
+    try:
+        asyncio.run(go())
+    except BaseException:
+        _drop(path)
+        raise
+    if not _ready(path):
+        _drop(path)
+        raise RuntimeError("голосовой сервис вернул пустой файл")
 
 
-def _play(path):
+def _ready(path):
+    """Файл пригоден к воспроизведению: существует и не пуст."""
+    try:
+        return os.path.getsize(path) > 0
+    except OSError:
+        return False
+
+
+def _drop(path):
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        log.exception("Не удалось убрать испорченный файл озвучки %s", path)
+
+
+# Проигрыватель WPF. Прежний вариант на COM-объекте WMPlayer.OCX молча
+# не работал: состояние навсегда застревало на 9 («переход»), позиция
+# оставалась нулевой, звука не было и ошибки тоже. MediaPlayer из
+# PresentationCore проигрывает mp3 и честно сообщает длительность.
+#
+# Длительность важна: фиксированная пауза обрезала бы пример на середине,
+# а слишком длинная держала бы лишний процесс. NaturalDuration появляется
+# не сразу после Open, поэтому её дожидаемся.
+PS_PLAY = """
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName PresentationCore
+$player = New-Object System.Windows.Media.MediaPlayer
+$player.Open([uri]$env:VOCAB_TTS_FILE)
+for ($i = 0; $i -lt 60 -and -not $player.NaturalDuration.HasTimeSpan; $i++) {
+    Start-Sleep -Milliseconds 50
+}
+$player.Play()
+$ms = 5000
+if ($player.NaturalDuration.HasTimeSpan) {
+    $ms = [int]$player.NaturalDuration.TimeSpan.TotalMilliseconds + 400
+}
+Start-Sleep -Milliseconds $ms
+$player.Close()
+"""
+
+
+def _play(path, wait=False):
+    """Проигрывает файл скрытым процессом.
+
+    Свой аудиовыход тянуть в приложение ради одной кнопки незачем, тем более
+    что PySide6 здесь стоит без модуля QtMultimedia. С `wait=True` дожидается
+    конца — так самопроверка может сказать, что звук правда прозвучал.
+    """
     if sys.platform != "win32":
-        return
-    # Проигрываем скрытым процессом: свой аудиовыход тянуть в приложение
-    # ради одной кнопки незачем.
-    script = (f'$p = New-Object -ComObject WMPlayer.OCX;'
-              f'$p.URL = "{path}"; $p.controls.play();'
-              f'Start-Sleep -Seconds 4; $p.close()')
-    subprocess.Popen(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", script],
-                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return False
+    # Путь передаём переменной окружения, а не внутрь команды: так его
+    # не нужно экранировать и строка команды не зависит от имени файла.
+    env = dict(os.environ, VOCAB_TTS_FILE=path)
+    encoded = base64.b64encode(PS_PLAY.encode("utf-16-le")).decode("ascii")
+    cmd = ["powershell", "-NoProfile", "-STA", "-WindowStyle", "Hidden",
+           "-EncodedCommand", encoded]
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if wait:
+        r = subprocess.run(cmd, env=env, creationflags=flags,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=60)
+        return r.returncode == 0
+    subprocess.Popen(cmd, env=env, creationflags=flags,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return True
 
 
 def say(text):
@@ -78,7 +147,7 @@ def say(text):
         try:
             os.makedirs(CACHE_DIR, exist_ok=True)
             path = _path(text)
-            if not os.path.exists(path):
+            if not _ready(path):
                 _synthesize(text, path)
             _play(path)
         except Exception:
@@ -86,6 +155,36 @@ def say(text):
 
     threading.Thread(target=worker, daemon=True).start()
     return True
+
+
+def check(text="Hello. This is how the voice sounds."):
+    """Проверка озвучки целиком: синтез, затем воспроизведение.
+
+    Нужна потому, что `say` работает в фоне и молчит об ошибках — именно так
+    озвучка и оказалась сломанной незаметно: проигрыватель не играл, а потом
+    голосовой сервис стал отвечать отказом. Здесь обе беды видны сразу.
+    """
+    if not is_enabled():
+        return False, "озвучка выключена в настройках"
+    path = _path(text)
+    fresh = not _ready(path)
+    if fresh:
+        try:
+            _synthesize(text, path)
+        except Exception as e:
+            log.exception("Самопроверка озвучки: синтез не удался")
+            return False, f"синтез не удался: {type(e).__name__}: {str(e)[:160]}"
+    try:
+        played = _play(path, wait=True)
+    except subprocess.TimeoutExpired:
+        return False, "проигрыватель не ответил за минуту"
+    except Exception as e:
+        log.exception("Самопроверка озвучки: воспроизведение не удалось")
+        return False, f"воспроизведение не удалось: {type(e).__name__}"
+    if not played:
+        return False, "проигрыватель завершился с ошибкой"
+    return True, {"voice": voice(), "bytes": os.path.getsize(path),
+                  "synthesized": fresh}
 
 
 def cache_size():

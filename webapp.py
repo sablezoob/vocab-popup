@@ -14,6 +14,7 @@ import backup
 import db
 import quiz
 import ruread
+import tts
 import srs
 import theme
 
@@ -436,6 +437,17 @@ def _period_totals(c, span):
         "active_days": one(f"SELECT COUNT(DISTINCT {day}) FROM events WHERE {day} >= ?", (since,)),
         "minutes": round(one(f"SELECT SUM(ms_visible) FROM events WHERE {day} >= ?", (since,)) / 60000.0, 1),
     }
+
+
+@app.post("/api/tts/test")
+def api_tts_test():
+    """Проверка озвучки по кнопке.
+
+    Карточка озвучивает в фоне и об ошибках молчит — так поломка и прожила
+    незаметно. Здесь ответ честный: что именно не сработало.
+    """
+    ok, info = tts.check()
+    return jsonify({"ok": ok, "info": info} if ok else {"ok": False, "error": info})
 
 
 @app.get("/api/backup")
