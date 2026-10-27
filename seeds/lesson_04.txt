@@ -1,0 +1,30 @@
+# Колода: lesson-04 — домашние дела
+# формат: слово | перевод | /транскрипция/ | пример EN | пример RU
+#
+# В списке с урока четыре фразы записаны с ошибками — в колоду они идут
+# исправленными, иначе закрепится неверное:
+#
+#   once in a week      -> once a week          («in» здесь лишнее)
+#   it take so long     -> it takes so long     (третье лицо требует -s)
+#   makes me feel upset -> it makes me feel upset   (нужен подлежащее)
+#   i cant decide about -> I can't decide about (апостроф и заглавная I)
+#
+# Ещё две оговорки:
+# * closet — американское слово. По-британски шкаф для одежды — wardrobe,
+#   а closet в Британии скорее чулан. Транскрипция в колодах британская.
+# * shelves — множественное от shelf; карточка заведена на словарную форму.
+
+closet | шкаф (амер.; брит. wardrobe) | /ˈklɒzɪt/ | She keeps the iron in the closet. | Она держит утюг в шкафу.
+shelf | полка (мн. ч. shelves) | /ʃelf/ | He has put the books back on the shelf. | Он поставил книги обратно на полку.
+household chores | домашние дела | /ˈhaʊshəʊld ˈtʃɔːz/ | Household chores take all my Saturday. | Домашние дела съедают всю мою субботу.
+sweep | подметать (swept — swept) | /swiːp/ | I sweep the kitchen every evening. | Я подметаю на кухне каждый вечер.
+mop | мыть пол шваброй | /mɒp/ | She has already mopped the floor. | Она уже вымыла пол.
+dust | вытирать пыль; пыль | /dʌst/ | I dust the shelves once a week. | Я вытираю пыль на полках раз в неделю.
+feed | кормить (fed — fed) | /fiːd/ | Have you fed the cat today? | Ты сегодня кормил кота?
+iron | гладить; утюг | /ˈaɪən/ | I hate to iron shirts. | Терпеть не могу гладить рубашки.
+turn on | включить | /ˌtɜːn ˈɒn/ | Turn on the light, please. | Включи свет, пожалуйста.
+turn off | выключить | /ˌtɜːn ˈɒf/ | Do not forget to turn off the iron. | Не забудь выключить утюг.
+once a week | раз в неделю | /wʌns ə ˈwiːk/ | We clean the whole flat once a week. | Мы убираем всю квартиру раз в неделю.
+it takes so long | это занимает так много времени | /ɪt ˈteɪks səʊ ˈlɒŋ/ | I hate mopping because it takes so long. | Ненавижу мыть пол, потому что это занимает так много времени.
+it makes me feel upset | это меня расстраивает | /ɪt ˈmeɪks mi fiːl ʌpˈset/ | A messy kitchen makes me feel upset. | Беспорядок на кухне меня расстраивает.
+I can't decide about | я не могу определиться насчёт | /aɪ kɑːnt dɪˈsaɪd əˈbaʊt/ | I can't decide about the new shelves. | Я не могу определиться насчёт новых полок.

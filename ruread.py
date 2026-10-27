@@ -157,7 +157,9 @@ def from_ipa(ipa, word=""):
 
     rhotic_at = _rhotic_positions(word, toks)
 
-    out, stress_at, vowels = [], None, 0
+    # Ударений может быть несколько: в «household chores» своё у каждого
+    # слова. Запоминаем все — один общий знак отметил бы только последнее.
+    out, stressed_at, vowels = [], [], 0
     for idx, (src, dst, stressed, _pos) in enumerate(toks):
         if idx in rhotic_at:
             dst = RHOTIC[src]
@@ -169,22 +171,24 @@ def from_ipa(ipa, word=""):
             # слоговые согласные: often → «офэн», able → «эйбэл»
             dst = "э" + dst
             vowels += 1
-            if stressed and stress_at is None:
-                stress_at = len(out)
+            if stressed:
+                stressed_at.append(len(out))
         if (src.startswith("j") and dst and dst[0] in IOTATED
                 and out and out[-1] and out[-1][-1] in CONSONANTS):
             dst = "ь" + dst          # queue → «кью», curious → «кьюриэс»
         if dst and dst[0] in VOWELS:
             vowels += 1
             if stressed:
-                stress_at = len(out)
+                stressed_at.append(len(out))
         out.append(dst)
 
-    if stress_at is not None and vowels > 1:
-        part = out[stress_at]
-        pos = next((k for k, c in enumerate(part) if c in VOWELS), None)
-        if pos is not None:
-            out[stress_at] = part[:pos + 1] + STRESS + part[pos + 1:]
+    # В односложном слове ударять некуда, и знак только мешал бы читать
+    if vowels > 1:
+        for at in stressed_at:
+            part = out[at]
+            pos = next((k for k, c in enumerate(part) if c in VOWELS), None)
+            if pos is not None:
+                out[at] = part[:pos + 1] + STRESS + part[pos + 1:]
 
     return "".join(out).strip()
 

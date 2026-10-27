@@ -124,3 +124,18 @@ def test_whole_dictionary_converts_cleanly():
             if not got or any(c.isascii() and c.isalpha() for c in got):
                 broken.append((p["word"], p["ipa"], got))
     assert not broken, f"не читается: {broken[:10]}"
+
+
+def test_each_word_of_a_phrase_keeps_its_stress():
+    """Во фразе ударений столько, сколько слов под ударением.
+
+    Один общий знак отмечал бы только последнее, и «household chores»
+    читалось бы как «хаусхоулд чо́рз» — с безударным первым словом.
+    """
+    got = ruread.from_ipa("/ˈhaʊshəʊld ˈtʃɔːz/", "household chores")
+    assert got.count(ruread.STRESS) == 2, got
+    first, second = got.split()
+    assert ruread.STRESS in first and ruread.STRESS in second
+
+    # одно ударение так и остаётся одним
+    assert ruread.from_ipa("/ˌkætʃ ˈʌp/", "catch up").count(ruread.STRESS) == 1
