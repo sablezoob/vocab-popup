@@ -299,6 +299,23 @@ autumn | осень"></textarea>
 
   <!-- ============ НАСТРОЙКИ ============ -->
   <section class="tab" id="tab-set">
+    <h2>Сервер — словарь и прогресс</h2>
+    <div id="syncbox"></div>
+    <div class="row" style="margin-top:12px">
+      <div style="flex:0"><button class="act" onclick="syncRun()">Сверить сейчас</button></div>
+      <div style="flex:0"><button class="ghost" onclick="syncTest()">Проверить связь</button></div>
+      <div style="flex:0"><label>&nbsp;</label><span class="hint" id="syncres"></span></div>
+      <div><label>Сверяться</label><select id="s_syncon">
+        <option value="1">автоматически</option><option value="0">только по кнопке</option>
+      </select></div>
+      <div><label>Как часто, минут</label>
+        <input id="s_syncevery" type="number" min="1" max="1440"></div>
+    </div>
+    <div class="hint">Словарь работает из локального файла и без сети, а сервер хранит
+      копию и служит точкой обмена между машинами. Спор решается временем правки:
+      побеждает та версия, которую меняли позже. Журнал показов только дополняется.
+      Удалённое слово не возвращается — удаление тоже уезжает.</div>
+
     <h2>Резервные копии</h2>
     <div id="backupbox"></div>
     <div class="row" style="margin-top:12px">
@@ -423,7 +440,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   $("#tab-" + b.dataset.t).classList.add("on");
   if (b.dataset.t === "stat") loadStats();
   if (b.dataset.t === "words") loadWords();
-  if (b.dataset.t === "set") { loadSet(); loadBackup(); }
+  if (b.dataset.t === "set") { loadSet(); loadBackup(); loadSync(); }
 });
 
 const STATUS_RU = {new:"новое", learning:"в работе", learned:"выучено", suspended:"отложено"};
@@ -813,6 +830,54 @@ async function testTts(){
   }
 }
 
+async function loadSync(){
+  const d = await (await fetch("/api/sync")).json();
+  $("#s_syncon").value = d.enabled ? "1" : "0";
+  $("#s_syncevery").value = d.every_min;
+  const p = d.pending || {};
+  const waiting = (p.words || 0) + (p.events || 0) + (p.deletions || 0);
+  $("#syncbox").innerHTML = `
+    <div class="grid">
+      <div class="card"><div class="n ${d.tunnel ? "ok" : "bad"}">${d.tunnel ? "есть" : "нет"}</div>
+        <div class="l">туннель к серверу</div></div>
+      <div class="card"><div class="n">${d.last_at ? esc(d.last_at.slice(0,16)) : "—"}</div>
+        <div class="l">последняя сверка</div></div>
+      <div class="card"><div class="n ${waiting ? "warn" : "ok"}">${waiting}</div>
+        <div class="l">ждут отправки</div></div>
+      <div class="card"><div class="n ${d.configured ? "ok" : "bad"}">${d.configured ? "да" : "нет"}</div>
+        <div class="l">доступы заданы</div></div>
+    </div>
+    <div class="hint" style="margin-top:10px">${esc(d.remote.user)}@${esc(d.remote.host)}:${d.remote.port}
+      · база <b>${esc(d.remote.database)}</b> · туннель ${esc(d.remote.ssh)}</div>`;
+}
+
+async function syncTest(){
+  const out = $("#syncres");
+  out.className = "hint"; out.textContent = "проверяю…";
+  const r = await (await fetch("/api/sync/test", {method:"POST"})).json();
+  if (r.ok){
+    out.className = "ok";
+    const n = r.info.rows;
+    out.textContent = `связь есть · ${r.info.server} · на сервере слов ${n.words}, показов ${n.events}`;
+  } else { out.className = "bad"; out.textContent = r.error; }
+  loadSync();
+}
+
+async function syncRun(){
+  const btn = event.target, out = $("#syncres");
+  btn.disabled = true; out.className = "hint"; out.textContent = "сверяю…";
+  try {
+    const r = await (await fetch("/api/sync/run", {method:"POST"})).json();
+    if (r.ok){
+      out.className = "ok";
+      out.textContent = `отправлено слов ${r.pushed.words}, показов ${r.pushed.events}; `
+        + `получено слов ${r.pulled.words}, показов ${r.pulled.events} (${r.seconds} с)`;
+    } else { out.className = "bad"; out.textContent = r.error; }
+  } catch (e) {
+    out.className = "bad"; out.textContent = "запрос не прошёл: " + e;
+  } finally { btn.disabled = false; loadSync(); }
+}
+
 async function loadBackup(){
   const b = await (await fetch("/api/backup")).json();
   const mb = n => (n/1024/1024).toFixed(2) + " МБ";
@@ -903,6 +968,7 @@ async function saveSet(){
     card_scale:$("#s_scale").value,
     tts_enabled:$("#s_tts").value, tts_voice:$("#s_voice").value,
     backup_enabled:$("#s_benabled").value, backup_keep:$("#s_bkeep").value,
+    sync_enabled:$("#s_syncon").value, sync_every_min:$("#s_syncevery").value,
     know_to_learn:$("#s_know").value, review_learned:$("#s_review").value,
     daily_goal:$("#s_goal").value, review_threshold:$("#s_rev").value,
     quiet_from:$("#s_qfrom").value, quiet_to:$("#s_qto").value,

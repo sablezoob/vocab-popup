@@ -13,7 +13,9 @@ import aiworker
 import backup
 import db
 import quiz
+import remote
 import ruread
+import sync
 import tts
 import srs
 import theme
@@ -437,6 +439,32 @@ def _period_totals(c, span):
         "active_days": one(f"SELECT COUNT(DISTINCT {day}) FROM events WHERE {day} >= ?", (since,)),
         "minutes": round(one(f"SELECT SUM(ms_visible) FROM events WHERE {day} >= ?", (since,)) / 60000.0, 1),
     }
+
+
+@app.get("/api/sync")
+def api_sync_status():
+    st = sync.status()
+    st["remote"] = {"host": db.get("sync_host"), "port": db.get_int("sync_port", 13306),
+                    "database": db.get("sync_db"), "user": db.get("sync_user"),
+                    "ssh": f'{db.get("sync_ssh_user")}@{db.get("sync_ssh_host")}'}
+    return jsonify(st)
+
+
+@app.post("/api/sync/test")
+def api_sync_test():
+    """Проверка связи: туннель, вход в базу и наличие таблиц."""
+    ok, info = remote.check()
+    return jsonify({"ok": ok, "info": info} if ok else {"ok": False, "error": info})
+
+
+@app.post("/api/sync/run")
+def api_sync_run():
+    """Сверка по кнопке. Идёт как есть — дашборд подождёт ответа."""
+    try:
+        return jsonify({"ok": True, **sync.run()})
+    except Exception as e:
+        logging.getLogger("vocab.web").exception("Сверка не удалась")
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}), 502
 
 
 @app.post("/api/tts/test")

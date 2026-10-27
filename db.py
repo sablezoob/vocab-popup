@@ -78,6 +78,19 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT
 );
 
+-- Удалённые слова. Без этого списка удаление не доехало бы до сервера:
+-- синхронизация видела бы только то, что есть, и вернула бы слово обратно.
+CREATE TABLE IF NOT EXISTS deletions (
+    word       TEXT PRIMARY KEY,
+    deleted_at TEXT NOT NULL
+);
+
+-- Докуда дошла синхронизация. Хранится локально: у каждой машины свой счёт.
+CREATE TABLE IF NOT EXISTS sync_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_srs_due    ON srs(due_at);
 CREATE INDEX IF NOT EXISTS idx_srs_status ON srs(status);
 CREATE INDEX IF NOT EXISTS idx_ev_word    ON events(word_id);
@@ -123,6 +136,22 @@ DEFAULTS = {
     "backup_enabled": "1",
     "backup_keep": "7",            # сколько копий держать
     "backup_at": "",               # когда снимали последнюю
+
+    # --- синхронизация с сервером ---
+    # Словарь и прогресс живут локально и уезжают на сервер копией: так
+    # карточки показываются и без сети, а данные хранятся не в одном месте.
+    # Пароль и путь к ключу лежат здесь же, в базе, — как ключ нейросети.
+    "sync_enabled": "0",
+    "sync_host": "127.0.0.1",
+    "sync_port": "13306",
+    "sync_db": "",
+    "sync_user": "",
+    "sync_password": "",
+    "sync_ssh_host": "",
+    "sync_ssh_user": "",
+    "sync_ssh_key": "",
+    "sync_every_min": "15",        # как часто сверяться, когда есть связь
+    "sync_at": "",                 # когда сверялись в последний раз
     "ai_words_per_batch": "20",     # сколько слов просить за раз
     "ai_level": "A2-B1",            # уровень генерируемой лексики
     "ai_grammar": "Present Perfect",  # грамматика, под которую строятся примеры
@@ -190,6 +219,14 @@ SRS_COLUMNS = {
     "priority_at": "TEXT DEFAULT ''",
 }
 
+# Отметка последней правки. По ней синхронизация решает, чья версия строки
+# свежее: сравнивать содержимое бессмысленно, а порядковый номер у каждой
+# машины свой.
+SYNC_WORD_COLUMNS = {"updated_at": "TEXT DEFAULT ''"}
+# Журнал показов и сессии только дописываются, но их номера на разных машинах
+# совпадут и перепутаются. Поэтому у каждой строки свой случайный ключ.
+UID_COLUMN = {"uid": "TEXT DEFAULT ''"}
+
 EXTRA_COLUMNS = {
     "v2": "TEXT DEFAULT ''",
     "v3": "TEXT DEFAULT ''",
@@ -215,9 +252,92 @@ def ensure_columns():
     added_srs = [n for n in SRS_COLUMNS if n not in have_srs]
     for name in added_srs:
         c.execute(f"ALTER TABLE srs ADD COLUMN {name} {SRS_COLUMNS[name]}")
+
+    # --- колонки для синхронизации ---
+    for table, columns in (("words", SYNC_WORD_COLUMNS), ("srs", SYNC_WORD_COLUMNS),
+                           ("events", UID_COLUMN), ("sessions", UID_COLUMN)):
+        present = {r["name"] for r in c.execute(f"PRAGMA table_info({table})")}
+        for name, decl in columns.items():
+            if name not in present:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
     c.commit()
+    ensure_sync_triggers()
+    backfill_sync_keys()
     if added_srs:
         backfill_history()
+
+
+# Отметку правки и случайный ключ проставляют триггеры, а не код приложения.
+# Записей в words и srs два десятка по всему проекту, и любая забытая строчка
+# означала бы, что изменение тихо не уедет на сервер.
+SYNC_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS words_touch_ins AFTER INSERT ON words
+WHEN NEW.updated_at = '' OR NEW.updated_at IS NULL
+BEGIN UPDATE words SET updated_at = (strftime('%Y-%m-%dT%H:%M:%S','now') || '+00:00')
+      WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS words_touch_upd AFTER UPDATE ON words
+WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE words SET updated_at = (strftime('%Y-%m-%dT%H:%M:%S','now') || '+00:00')
+      WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS srs_touch_ins AFTER INSERT ON srs
+WHEN NEW.updated_at = '' OR NEW.updated_at IS NULL
+BEGIN UPDATE srs SET updated_at = (strftime('%Y-%m-%dT%H:%M:%S','now') || '+00:00')
+      WHERE word_id = NEW.word_id; END;
+
+CREATE TRIGGER IF NOT EXISTS srs_touch_upd AFTER UPDATE ON srs
+WHEN NEW.updated_at IS OLD.updated_at
+BEGIN UPDATE srs SET updated_at = (strftime('%Y-%m-%dT%H:%M:%S','now') || '+00:00')
+      WHERE word_id = NEW.word_id; END;
+
+CREATE TRIGGER IF NOT EXISTS events_uid AFTER INSERT ON events
+WHEN NEW.uid = '' OR NEW.uid IS NULL
+BEGIN UPDATE events SET uid = lower(hex(randomblob(16))) WHERE id = NEW.id; END;
+
+CREATE TRIGGER IF NOT EXISTS sessions_uid AFTER INSERT ON sessions
+WHEN NEW.uid = '' OR NEW.uid IS NULL
+BEGIN UPDATE sessions SET uid = lower(hex(randomblob(16))) WHERE id = NEW.id; END;
+
+-- Удаление слова оставляет след, иначе синхронизация вернёт его с сервера
+CREATE TRIGGER IF NOT EXISTS words_tombstone AFTER DELETE ON words
+BEGIN INSERT OR REPLACE INTO deletions(word, deleted_at)
+      VALUES (lower(OLD.word), (strftime('%Y-%m-%dT%H:%M:%S','now') || '+00:00')); END;
+"""
+
+
+TRIGGER_NAMES = ("words_touch_ins", "words_touch_upd", "srs_touch_ins",
+                 "srs_touch_upd", "events_uid", "sessions_uid", "words_tombstone")
+
+
+def ensure_sync_triggers():
+    """Пересоздаёт триггеры целиком.
+
+    `CREATE TRIGGER IF NOT EXISTS` оставил бы старое тело в базах, которые
+    уже обновлялись, — а тело менялось вместе с форматом времени.
+    """
+    c = conn()
+    for name in TRIGGER_NAMES:
+        c.execute(f"DROP TRIGGER IF EXISTS {name}")
+    c.executescript(SYNC_TRIGGERS)
+    c.commit()
+
+
+def backfill_sync_keys():
+    """Проставляет ключи строкам, появившимся до синхронизации.
+
+    Без этого вся прежняя история осталась бы без опознавательных знаков
+    и уехала бы на сервер дубликатами при каждом запуске.
+    """
+    c = conn()
+    c.execute("UPDATE words SET updated_at = created_at WHERE updated_at = '' OR updated_at IS NULL")
+    c.execute("""UPDATE srs SET updated_at = COALESCE(NULLIF(learned_at,''),
+                                                      NULLIF(due_at,''), '1970-01-01T00:00:00+00:00')
+                 WHERE updated_at = '' OR updated_at IS NULL""")
+    for table in ("events", "sessions"):
+        c.execute(f"""UPDATE {table} SET uid = lower(hex(randomblob(16)))
+                      WHERE uid = '' OR uid IS NULL""")
+    c.commit()
 
 
 def backfill_history():

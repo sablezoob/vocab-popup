@@ -21,6 +21,7 @@ import backup
 import db
 import hotkeys
 import srs
+import sync
 import webapp
 from popup import Popup
 
@@ -176,6 +177,8 @@ class App:
         self._interval_min = 3
         self._due_at = 0.0
         self._backup_check_at = 0.0
+        self._sync_check_at = 0.0
+        self._syncing = False
         self._review_offered_on = None      # дата последнего предложения разобрать
 
         self.tray = QSystemTrayIcon(make_icon("A"))
@@ -310,6 +313,13 @@ class App:
         a_dash = QAction("Дашборд и слова…", m)
         a_dash.triggered.connect(lambda: webbrowser.open(DASHBOARD_URL))
         m.addAction(a_dash)
+
+        if sync.db.get("sync_enabled", "0") == "1":
+            ss = sync.status()
+            a_sync = QAction("Сверить с сервером", m)
+            a_sync.setToolTip("Последняя сверка: %s" % (ss["last_at"] or "не было"))
+            a_sync.triggered.connect(self.sync_now)
+            m.addAction(a_sync)
 
         st = backup.status()
         a_backup = QAction("Резервная копия сейчас", m)
@@ -478,6 +488,7 @@ class App:
 
     def on_timer(self):
         self.maybe_backup()
+        self.maybe_sync()
         want = max(1, db.get_int("interval_min", 3))
         if want != self._interval_min:
             # интервал изменили из дашборда — пересчитываем срок показа
@@ -509,6 +520,62 @@ class App:
                 log.info("Резервная копия готова: %s", os.path.basename(path))
         except Exception:
             log.exception("Резервная копия не удалась")
+
+    SYNC_CHECK_S = 60
+
+    def maybe_sync(self):
+        """Сверка с сервером по расписанию.
+
+        Идёт в отдельном потоке: первая сверка переносит весь журнал показов
+        и занимает секунды, а в главном потоке это заморозило бы карточку.
+        Повторный запуск, пока прошлый не кончился, не начинаем.
+        """
+        now = time.monotonic()
+        if now < self._sync_check_at or self._syncing:
+            return
+        self._sync_check_at = now + self.SYNC_CHECK_S
+        if not sync.due():
+            return
+        self._syncing = True
+
+        def worker():
+            try:
+                out = sync.run()
+                if out:
+                    log.info("Сверка с сервером: %s", out)
+            except Exception as e:
+                # Нет сети или упал туннель — это обычное дело для ноутбука,
+                # поэтому в журнал одной строкой, без разбора стека
+                log.warning("Сверка не удалась: %s: %s", type(e).__name__, str(e)[:160])
+            finally:
+                self._syncing = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def sync_now(self):
+        """Сверка по кнопке: о результате сообщаем, молчаливая кнопка хуже."""
+        if self._syncing:
+            self.tray.showMessage("Vocab Popup", "Сверка уже идёт",
+                                  QSystemTrayIcon.Information, 4000)
+            return
+        self._syncing = True
+
+        def worker():
+            try:
+                out = sync.run()
+                p, g = out["pushed"], out["pulled"]
+                text = (f"Отправлено: слов {p['words']}, показов {p['events']}. "
+                        f"Получено: слов {g['words']}, показов {g['events']}")
+                icon = QSystemTrayIcon.Information
+            except Exception as e:
+                text = f"Не вышло: {type(e).__name__}: {str(e)[:120]}"
+                icon = QSystemTrayIcon.Warning
+                log.exception("Сверка по кнопке не удалась")
+            finally:
+                self._syncing = False
+            self.tray.showMessage("Vocab Popup", text, icon, 7000)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def backup_now(self):
         """Копия по кнопке. Результат показываем всплывающим сообщением:

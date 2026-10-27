@@ -65,11 +65,24 @@ def test_verify_notices_a_broken_copy(box, words):
     ok, _info = backup.verify(path)
     assert ok
 
-    with open(path, "r+b") as f:        # портим середину файла
-        f.seek(2048)
-        f.write(b"\x00" * 512)
+    # Портим всё, кроме заголовка. Прежний вариант писал мусор по
+    # фиксированному смещению и перестал попадать в данные, когда база
+    # подросла: проверка проходила на заведомо битом файле.
+    size = os.path.getsize(path)
+    with open(path, "r+b") as f:
+        f.seek(100)
+        f.write(bytes(size - 100))
     ok, info = backup.verify(path)
     assert not ok, f"повреждённая копия прошла проверку: {info}"
+
+
+def test_verify_notices_a_truncated_copy(box, words):
+    """Копия, оборванная на половине, открывается — но данных в ней нет."""
+    path = backup.make()
+    with open(path, "r+b") as f:
+        f.truncate(os.path.getsize(path) // 2)
+    ok, _info = backup.verify(path)
+    assert not ok
 
 
 def test_verify_notices_missing_words(box, words):
